@@ -16,18 +16,18 @@ import {
 	loadMoreIndex,
 	mpvSetup,
 	type NoticeAction,
+	type OverlayState,
 	offerShown,
-	type PopoverState,
 	selectedTrack,
 	sourceKey,
 	sourceLabel,
 	type Target,
 	trackOffset,
-} from "./popover-model.ts";
+} from "./overlay-model.ts";
 import { pad, padStart, spread, truncate, visibleWidth, wrap } from "./text.ts";
 import type { Track } from "./youtube-source.ts";
 
-// Renders popover state to terminal lines. Every line fits `width` columns.
+// Renders overlay state to terminal lines. Every line fits `width` columns.
 // Each frame also lists where its clickable elements are (S23), in card cells.
 
 export type Role = "accent" | "muted" | "dim" | "success" | "warning" | "error" | "text" | "border";
@@ -133,11 +133,11 @@ const NO_BROWSER = "No supported browser found (Firefox, Zen, Chromium, Chrome, 
 /** Columns before the body text: the border and one space of padding. */
 const INSET = 2;
 
-export function renderPopover(state: PopoverState, opts: ViewOptions): string[] {
+export function renderOverlay(state: OverlayState, opts: ViewOptions): string[] {
 	return renderFrame(state, opts).lines;
 }
 
-export function renderFrame(state: PopoverState, opts: ViewOptions): Frame {
+export function renderFrame(state: OverlayState, opts: ViewOptions): Frame {
 	const { width, theme: t } = opts;
 	if (width < 8) return { lines: [truncate("YouTube", Math.max(0, width))], hits: [], panes: [] };
 	const inner = width - 4;
@@ -197,7 +197,7 @@ export function targetId(target: Target): string {
 }
 
 /** Hit id of the row under the cursor on connect, Dependencies or a dialog, or null. */
-function cursorId(state: PopoverState): string | null {
+function cursorId(state: OverlayState): string | null {
 	const { dialog } = state;
 	if (dialog) return dialog.type === "download" ? null : `dialog:${dialog.cursor}`;
 	return state.screen === "dependencies" ? `dependency:${state.gate.cursor}` : `connect:${state.connect.cursor}`;
@@ -280,7 +280,7 @@ function paintCells(line: string, x: number, end: number, paint: (text: string) 
 const mark = (marks: Marks, y: number, x: number, end: number, target: Target) =>
 	marks.hits.push({ y, span: { x, end, target } });
 
-function titleRow(state: PopoverState, inner: number, t: ViewTheme): string {
+function titleRow(state: OverlayState, inner: number, t: ViewTheme): string {
 	let right: string;
 	if (state.screen === "dependencies") right = t.fg("dim", "Dependencies");
 	else if (state.screen === "connect") right = t.fg("dim", "not connected");
@@ -294,7 +294,7 @@ function optionRow(label: string, cursor: boolean, inner: number, t: ViewTheme):
 	return cursor ? t.selected(line) : line;
 }
 
-function connectBody(state: PopoverState, inner: number, t: ViewTheme, marks: Marks): string[] {
+function connectBody(state: OverlayState, inner: number, t: ViewTheme, marks: Marks): string[] {
 	const { connect } = state;
 	const lines = [titleRow(state, inner, t), RULE, ""];
 	for (const text of CONNECT_INTRO) lines.push(...wrap(text, inner));
@@ -351,7 +351,7 @@ function connectBody(state: PopoverState, inner: number, t: ViewTheme, marks: Ma
 }
 
 /** Dependencies (S19): one row per tool, a missing one with its action on the right, then Check again. */
-function dependenciesBody(state: PopoverState, inner: number, t: ViewTheme, marks: Marks): string[] {
+function dependenciesBody(state: OverlayState, inner: number, t: ViewTheme, marks: Marks): string[] {
 	const deps = state.deps;
 	const options = dependencyOptions(state);
 	const selected = options[state.gate.cursor];
@@ -394,7 +394,7 @@ type Row = { line: string; spans: Span[] };
  * The notice line (`Updating yt-dlp…` while an update runs) with its action hits, or null.
  * A transient notice takes the row; the update offer (S25) is drawn when none is shown.
  */
-function noticeRow(state: PopoverState, t: ViewTheme, inner: number): Row | null {
+function noticeRow(state: OverlayState, t: ViewTheme, inner: number): Row | null {
 	if (state.updating) return { line: t.fg("dim", UPDATING), spans: [] };
 	if (state.offer && offerShown(state)) return offerRow(state.offer, t, inner);
 	const notice = state.notice;
@@ -450,7 +450,7 @@ function downloadRow(received: number, total: number | null, inner: number, t: V
 }
 
 /** Install yt-dlp and How to install mpv, drawn instead of the current screen. */
-function dialogBody(state: PopoverState, inner: number, t: ViewTheme, marks: Marks): string[] {
+function dialogBody(state: OverlayState, inner: number, t: ViewTheme, marks: Marks): string[] {
 	const dialog = state.dialog;
 	if (!dialog) return [];
 	const lines = [titleRow(state, inner, t), RULE, ""];
@@ -494,7 +494,7 @@ function dialogBody(state: PopoverState, inner: number, t: ViewTheme, marks: Mar
 	return lines;
 }
 
-function mainBody(state: PopoverState, inner: number, opts: ViewOptions, marks: Marks): string[] {
+function mainBody(state: OverlayState, inner: number, opts: ViewOptions, marks: Marks): string[] {
 	const t = opts.theme;
 	const scroll = opts.scroll ?? { left: 0, right: 0 };
 	const row = noticeRow(state, t, inner);
@@ -564,7 +564,7 @@ function leftLabel(row: Extract<LeftRow, { key: string }>): string {
 	return row.indent ? `  ${sanitize(row.label)}` : row.label;
 }
 
-function leftPane(state: PopoverState, w: number, h: number, t: ViewTheme, scroll: Scroll): PaneLines {
+function leftPane(state: OverlayState, w: number, h: number, t: ViewTheme, scroll: Scroll): PaneLines {
 	const active = state.source ? sourceKey(state.source) : null;
 	const anonymous = !hasAccount(state);
 	let sel = -1;
@@ -590,13 +590,13 @@ function leftPane(state: PopoverState, w: number, h: number, t: ViewTheme, scrol
 	return { lines: visible, spans };
 }
 
-function currentTrackId(state: PopoverState): string | undefined {
+function currentTrackId(state: OverlayState): string | undefined {
 	const p = state.player;
 	if (!p?.running || p.idle || p.position < 0) return undefined;
 	return p.queue[p.position]?.id;
 }
 
-function accountPane(state: PopoverState, w: number, t: ViewTheme): PaneLines {
+function accountPane(state: OverlayState, w: number, t: ViewTheme): PaneLines {
 	const focused = state.focus === "right";
 	const rows = ACCOUNT_CHOICES.map((choice, i) =>
 		optionRow(ACCOUNT_CHOICE_LABELS[choice], focused && i === state.accountMenu, w, t),
@@ -605,7 +605,7 @@ function accountPane(state: PopoverState, w: number, t: ViewTheme): PaneLines {
 	return { lines: [truncate(t.bold(accountLabel(state)), w), "", ...rows], spans: [[], [], ...spans] };
 }
 
-function rightPane(state: PopoverState, w: number, h: number, t: ViewTheme, scroll: Scroll): PaneLines {
+function rightPane(state: OverlayState, w: number, h: number, t: ViewTheme, scroll: Scroll): PaneLines {
 	if (state.accountMenu !== null) {
 		const pane = accountPane(state, w, t);
 		return { lines: pane.lines.slice(0, h), spans: pane.spans };
@@ -689,7 +689,7 @@ function trackRows(tracks: Track[], w: number, sel: number, current: string | un
 }
 
 /** The key hints for the focus, longest first. */
-function hintsFor(state: PopoverState): string[] {
+function hintsFor(state: OverlayState): string[] {
 	if (state.accountMenu !== null && state.focus === "right") return ACCOUNT_HINTS;
 	if (state.focus !== "right" || state.source?.kind === "queue") return PLAYER_HINTS;
 	if (state.source?.kind !== "search") return RELOAD_HINTS;
@@ -702,7 +702,7 @@ const fitHints = (hints: string[], room: number) => hints.find((h) => visibleWid
 /** ⏮ ⏸/▶ ⏭ at the start of the player row, each one clickable; the middle one shows the state. */
 const CONTROLS = ["prev", "toggle", "next"] as const;
 
-function playerRow(state: PopoverState, inner: number, t: ViewTheme): Row {
+function playerRow(state: OverlayState, inner: number, t: ViewTheme): Row {
 	const tiers = hintsFor(state);
 	const p = state.player;
 	const title = sanitize(p?.title);

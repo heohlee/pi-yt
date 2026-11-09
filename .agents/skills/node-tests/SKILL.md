@@ -39,7 +39,7 @@ Do not use for passive documentation or release copy with no test-behavior impac
 
 | Condition | Action |
 | --- | --- |
-| A pure function proves the contract | Test it directly instead of going through the popover |
+| A pure function proves the contract | Test it directly instead of going through the overlay |
 | Behavior spawns yt-dlp or mpv | Use the spawn fake and assert the exact arguments |
 | Behavior talks to a running mpv | Use the IPC socket fake |
 | Behavior depends on paths or installed copies | Use a `mkdtemp` home |

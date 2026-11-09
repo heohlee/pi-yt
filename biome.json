@@ -45,7 +45,7 @@
 			}
 		},
 		{
-			"includes": ["lib/text.ts", "lib/popover-view.ts"],
+			"includes": ["lib/text.ts", "lib/overlay-view.ts"],
 			"linter": {
 				"rules": {
 					"suspicious": {

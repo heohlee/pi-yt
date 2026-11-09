@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { PlayerState } from "../lib/player.ts";
 import {
 	type Action,
-	initPopover,
+	initOverlay,
 	type Key,
-	type PopoverInit,
-	type PopoverState,
+	type OverlayInit,
+	type OverlayState,
 	reduce,
-} from "../lib/popover-model.ts";
-import { hitAt, paneAt, renderFrame, renderPopover, type ViewTheme } from "../lib/popover-view.ts";
+} from "../lib/overlay-model.ts";
+import { hitAt, paneAt, renderFrame, renderOverlay, type ViewTheme } from "../lib/overlay-view.ts";
+import type { PlayerState } from "../lib/player.ts";
 import { pad, stripAnsi, truncate, visibleWidth, wrap } from "../lib/text.ts";
 import type { Track } from "../lib/youtube-source.ts";
 
@@ -75,14 +75,14 @@ const playing = (over: Partial<PlayerState> = {}): PlayerState => ({
 	...over,
 });
 
-function apply(state: PopoverState, ...actions: Action[]) {
+function apply(state: OverlayState, ...actions: Action[]) {
 	for (const action of actions) state = reduce(state, action).state;
 	return state;
 }
 const key = (k: Key): Action => ({ type: "key", key: k });
 
-function connectState(over: Partial<PopoverInit> = {}) {
-	return initPopover({
+function connectState(over: Partial<OverlayInit> = {}) {
+	return initOverlay({
 		account: null,
 		anonymous: false,
 		browsers: [FIREFOX, CHROMIUM],
@@ -91,8 +91,8 @@ function connectState(over: Partial<PopoverInit> = {}) {
 		...over,
 	}).state;
 }
-function mainState(over: Partial<PopoverInit> = {}, tracks: Track[] | null = TRACKS) {
-	const { state, effects } = initPopover({
+function mainState(over: Partial<OverlayInit> = {}, tracks: Track[] | null = TRACKS) {
+	const { state, effects } = initOverlay({
 		account: ACCOUNT,
 		anonymous: false,
 		browsers: [],
@@ -104,11 +104,11 @@ function mainState(over: Partial<PopoverInit> = {}, tracks: Track[] | null = TRA
 	const load = effects.find((e) => e.type === "load") as { id: number };
 	return apply(state, { type: "loaded", id: load.id, result: { ok: true, tracks } });
 }
-const render = (state: PopoverState, width: number, height = 30) => renderPopover(state, { width, height, theme });
-const plain = (state: PopoverState, width: number, height = 30) => render(state, width, height).map(stripAnsi);
+const render = (state: OverlayState, width: number, height = 30) => renderOverlay(state, { width, height, theme });
+const plain = (state: OverlayState, width: number, height = 30) => render(state, width, height).map(stripAnsi);
 const has = (lines: string[], text: string) => lines.some((l) => l.includes(text));
 
-function assertFits(state: PopoverState, label: string) {
+function assertFits(state: OverlayState, label: string) {
 	for (const width of WIDTHS) {
 		for (const line of render(state, width)) {
 			assert.ok(
@@ -161,7 +161,7 @@ test("connect browser rows truncate long profile names", () => {
 });
 
 /** The body rows between the title rule and the footer rule, trailing spaces and borders removed. */
-const bodyRows = (state: PopoverState, width: number) => {
+const bodyRows = (state: OverlayState, width: number) => {
 	const lines = plain(state, width).map((l) => l.slice(2, -2).trimEnd());
 	return { title: lines[1], body: lines.slice(3, -3), footer: lines.at(-2) };
 };
@@ -170,7 +170,7 @@ const bodyRows = (state: PopoverState, width: number) => {
 test("S19 the dependencies screen shows the exact title, rows and footer for each combination", () => {
 	const YT_MISSING = "✗ yt-dlp   reads YouTube";
 	const MPV_MISSING = "✗ mpv      plays the audio";
-	const cases: [PopoverInit["deps"], [string, string][]][] = [
+	const cases: [OverlayInit["deps"], [string, string][]][] = [
 		[
 			{ mpv: false, ytDlp: null },
 			[
@@ -316,7 +316,7 @@ test("connect signin error shows message, hint and the three options, never deta
 // S2
 test("main title row shows the connected browser, or no account", () => {
 	assert.match(plain(mainState(), 120).find((l) => l.includes("YouTube"))!, /YouTube\s+Firefox ✓/);
-	const anon = initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state;
+	const anon = initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state;
 	const lines = plain(apply(anon, key("left")), 120);
 	assert.match(lines.find((l) => l.includes("YouTube"))!, /YouTube\s+no account/);
 	// The Connect an account row replaces the old dim note: it appears once.
@@ -338,7 +338,7 @@ test("left pane lists the sources in order with counts, ending with the account 
 	assert.match(lines[rows[0]], /▸ Recommended\s+3 │/);
 
 	const anon = plain(
-		apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
+		apply(initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
 		120,
 	);
 	const search = anon.findIndex((l) => l.includes("› Search…"));
@@ -347,7 +347,7 @@ test("left pane lists the sources in order with counts, ending with the account 
 });
 
 /** The left pane rows at 120 columns, spaces collapsed, blank rows dropped. */
-const leftColumn = (state: PopoverState) =>
+const leftColumn = (state: OverlayState) =>
 	plain(state, 120)
 		.slice(3, -3)
 		.map((l) =>
@@ -375,7 +375,7 @@ test("S18 left pane order is exact with an account and without one", () => {
 		"Account · Firefox",
 	]);
 	const anon = apply(
-		initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state,
+		initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state,
 		key("left"),
 	);
 	assert.deepEqual(leftColumn(anon), [
@@ -398,7 +398,7 @@ test("no line uses the old ⌕ or ≡ icons", () => {
 	const states = [
 		mainState({ player: playing() }),
 		apply(mainState(), key({ text: "/" }), key({ text: "x" })),
-		initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state,
+		initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state,
 	];
 	for (const state of states)
 		for (const width of WIDTHS) assert.ok(!plain(state, width).some((l) => l.includes("⌕") || l.includes("≡")));
@@ -442,7 +442,7 @@ test("right pane shows Loading…, Nothing here. and errors as message + hint wi
 	assert.ok(has(plain(mainState({}, null), 120), "Loading…"));
 	assert.ok(has(plain(mainState({}, []), 120), "Nothing here."));
 
-	const start = initPopover({ account: ACCOUNT, anonymous: false, browsers: [], deps: null, player: null });
+	const start = initOverlay({ account: ACCOUNT, anonymous: false, browsers: [], deps: null, player: null });
 	const id = (start.effects[0] as { id: number }).id;
 	const failed = apply(start.state, {
 		type: "loaded",
@@ -549,7 +549,7 @@ test("long lists scroll to keep the selection visible", () => {
 
 test("every line fits at 60, 80, 100 and 140 columns across states", () => {
 	const long = [track(1, "A very long title ".repeat(10)), ...TRACKS];
-	const states: [string, PopoverState][] = [
+	const states: [string, OverlayState][] = [
 		["connect", connectState()],
 		["long profile", connectState({ browsers: [LONG_PROFILE, { ...FIREFOX, profileName: "p".repeat(200) }] })],
 		["loading", mainState({}, null)],
@@ -557,10 +557,10 @@ test("every line fits at 60, 80, 100 and 140 columns across states", () => {
 			"long",
 			apply(mainState({ player: playing({ title: "x".repeat(300), artist: "y".repeat(80) }) }, long), key("tab")),
 		],
-		["anon", initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state],
+		["anon", initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state],
 		[
 			"anon left",
-			apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
+			apply(initOverlay({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
 		],
 	];
 	for (const [label, state] of states) assertFits(state, label);
@@ -568,7 +568,7 @@ test("every line fits at 60, 80, 100 and 140 columns across states", () => {
 
 /** Recommended with a full first page, focus right, cursor on Load more. */
 function pagedState() {
-	const { state, effects } = initPopover({
+	const { state, effects } = initOverlay({
 		account: ACCOUNT,
 		anonymous: false,
 		browsers: [],
@@ -805,7 +805,7 @@ test("S23 Account has no Update yt-dlp; the offer reads `yt-dlp <new> available 
 
 // S17/S8: action notices read `<message>  ▸ <action>`.
 test("S17 extract and mpv-missing notices offer their action", () => {
-	const start = initPopover({
+	const start = initOverlay({
 		account: ACCOUNT,
 		anonymous: false,
 		browsers: [],
@@ -855,11 +855,11 @@ test("S20 player row shows the picked track with Loading… while it resolves", 
 
 /** Plain text of `line` between columns x (inclusive) and end (exclusive); fixtures use one-column glyphs. */
 const cols = (line: string, x: number, end: number) => Array.from(stripAnsi(line)).slice(x, end).join("");
-const frame = (state: PopoverState, width: number, height = 30, hover?: string) =>
+const frame = (state: OverlayState, width: number, height = 30, hover?: string) =>
 	renderFrame(state, { width, height, theme, hover });
 
 /** Every expected hit exists, sits on its own text, and every hit stays inside the card. */
-function assertHits(state: PopoverState, width: number, expected: Record<string, string>, height = 30) {
+function assertHits(state: OverlayState, width: number, expected: Record<string, string>, height = 30) {
 	const f = frame(state, width, height);
 	for (const hit of f.hits) {
 		assert.ok(hit.y > 0 && hit.y < f.lines.length - 1, `${hit.id} y ${hit.y}`);
@@ -990,7 +990,7 @@ test("S23 hitAt finds the hit under a cell and the progress-bar ratio; paneAt fi
 });
 
 test("S23 hints show n p and , . where they fit and give way in order; every line fits", () => {
-	const row = (state: PopoverState, width: number) => plain(state, width).at(-2)!;
+	const row = (state: OverlayState, width: number) => plain(state, width).at(-2)!;
 	const playingState = apply(mainState({ player: playing() }), { type: "player", state: playing() });
 	assert.match(row(playingState, 140), /tab pane · space ⏯ · n p track · , \. ±5s · esc/);
 	assert.match(row(playingState, 90), /tab pane · space ⏯ · , \. ±5s · esc/);

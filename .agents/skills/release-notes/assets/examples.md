@@ -14,7 +14,7 @@ Body:
 ```markdown
 ## Fixes
 
-- Keep the selected video after the popover list refreshes.
+- Keep the selected video after the overlay list refreshes.
 - Show a clear message when mpv is not installed.
 
 **Full changelog:** `v0.1.0...v0.1.1`
@@ -31,12 +31,12 @@ Body:
 ```markdown
 ## Features
 
-- **Search:** filter the library from the `/yt` popover.
+- **Search:** filter the library from the `/yt` overlay.
 - **Resume playback:** continue a video where mpv left it.
 
 ## Fixes
 
-- Keep the selected video after the popover list refreshes.
+- Keep the selected video after the overlay list refreshes.
 
 **Full changelog:** `v0.1.0...v0.2.0`
 

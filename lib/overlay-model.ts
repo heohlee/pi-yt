@@ -12,7 +12,7 @@ import type {
 	VerifyResult,
 } from "./youtube-source.ts";
 
-// Pure state machine for the /yt popover: (state, action) -> (state, effects).
+// Pure state machine for the /yt overlay: (state, action) -> (state, effects).
 // No I/O here; extensions/youtube.ts runs the effects and feeds results back.
 
 export type Key = "up" | "down" | "enter" | "esc" | "tab" | "left" | "right" | "backspace" | { text: string };
@@ -137,7 +137,7 @@ export type DependencyOption = "install" | "mpvHelp" | "check";
 export type AccountChoice = "another" | "disconnect";
 export const ACCOUNT_CHOICES: AccountChoice[] = ["another", "disconnect"];
 
-export interface PopoverState {
+export interface OverlayState {
 	screen: "dependencies" | "connect" | "main";
 	account: Account | null;
 	/** The user chose to continue without an account in this Pi session. */
@@ -152,7 +152,7 @@ export interface PopoverState {
 	/** The newer yt-dlp offered (S25); it stays apart from the notices until Update or Later, or null. */
 	offer: string | null;
 	/** Dependencies screen (S19): its cursor, and the remembered place to open once both tools are found. */
-	gate: { cursor: number; snapshot: PopoverSnapshot | null };
+	gate: { cursor: number; snapshot: OverlaySnapshot | null };
 	connect: {
 		phase: "pick" | "verifying" | "error";
 		cursor: number;
@@ -196,15 +196,15 @@ export interface PopoverState {
 	nextId: number;
 }
 
-export interface PopoverInit {
+export interface OverlayInit {
 	account: Account | null;
 	anonymous: boolean;
 	browsers: Browser[];
 	deps: Deps | null;
 	setup?: SetupInfo | null;
 	player: PlayerState | null;
-	/** Where the user left the popover earlier in this Pi session. */
-	snapshot?: PopoverSnapshot | null;
+	/** Where the user left the overlay earlier in this Pi session. */
+	snapshot?: OverlaySnapshot | null;
 	/** The saved account file exists but could not be used (#46). */
 	configUnreadable?: boolean;
 }
@@ -215,8 +215,8 @@ export interface PaneScroll {
 	right: number;
 }
 
-/** What the user could see when the popover closed, kept in memory for the Pi session (S18). */
-export interface PopoverSnapshot {
+/** What the user could see when the overlay closed, kept in memory for the Pi session (S18). */
+export interface OverlaySnapshot {
 	/** The account it was taken with; account-only sources need the same one. */
 	account: Account | null;
 	leftKey: string;
@@ -250,7 +250,7 @@ export type LeftRow =
 	| { type: "note"; text: string; tone: "dim" | "error" };
 
 export interface Result {
-	state: PopoverState;
+	state: OverlayState;
 	effects: Effect[];
 }
 
@@ -283,11 +283,11 @@ export function sourceLabel(source: SourceRef): string {
 	}
 }
 
-export function hasAccount(state: PopoverState): boolean {
+export function hasAccount(state: OverlayState): boolean {
 	return state.account !== null;
 }
 
-export function connectOptions(state: PopoverState): ConnectOption[] {
+export function connectOptions(state: OverlayState): ConnectOption[] {
 	const options: ConnectOption[] =
 		state.connect.phase === "error"
 			? [{ type: "retry" }, { type: "another" }, { type: "anonymous" }]
@@ -298,7 +298,7 @@ export function connectOptions(state: PopoverState): ConnectOption[] {
 /** yt-dlp or mpv is known to be missing; unknown tools (null) do not block. */
 export const missingTool = (deps: Deps | null) => deps !== null && (!deps.ytDlp || !deps.mpv);
 
-export function dependencyOptions(state: PopoverState): DependencyOption[] {
+export function dependencyOptions(state: OverlayState): DependencyOption[] {
 	const options: DependencyOption[] = [];
 	if (state.deps && !state.deps.ytDlp) options.push("install");
 	if (state.deps && !state.deps.mpv) options.push("mpvHelp");
@@ -307,7 +307,7 @@ export function dependencyOptions(state: PopoverState): DependencyOption[] {
 }
 
 /** The choices of the open dialog, in order; download has none. */
-export function dialogChoices(state: PopoverState): DialogChoice[] {
+export function dialogChoices(state: OverlayState): DialogChoice[] {
 	switch (state.dialog?.type) {
 		case "confirm":
 			return ["install", "cancel"];
@@ -321,11 +321,11 @@ export function dialogChoices(state: PopoverState): DialogChoice[] {
 }
 
 const MPV_UNKNOWN = { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" };
-export function mpvSetup(state: PopoverState): SetupInfo["mpv"] {
+export function mpvSetup(state: OverlayState): SetupInfo["mpv"] {
 	return state.setup?.mpv ?? MPV_UNKNOWN;
 }
 
-export function leftRows(state: PopoverState): LeftRow[] {
+export function leftRows(state: OverlayState): LeftRow[] {
 	const rows: LeftRow[] = ACCOUNT_SOURCES.map((kind) => ({
 		type: "source",
 		key: kind,
@@ -389,7 +389,7 @@ export function leftRows(state: PopoverState): LeftRow[] {
 	return rows;
 }
 
-export function accountLabel(state: PopoverState): string {
+export function accountLabel(state: OverlayState): string {
 	return state.account ? `Account · ${browserLabel(state.account.browser)}` : "Connect an account";
 }
 
@@ -397,20 +397,20 @@ const selectable = (row: LeftRow): row is Extract<LeftRow, { key: string }> =>
 	row.type === "source" || row.type === "playlists" || row.type === "account";
 
 /** Right pane rows before the first track: Play all + Shuffle, or the search input. */
-export function trackOffset(state: PopoverState): number {
+export function trackOffset(state: OverlayState): number {
 	return state.source?.kind === "search" ? 1 : 2;
 }
 
-const clampRight = (state: PopoverState, index: number) => Math.max(0, Math.min(rightCount(state) - 1, index));
+const clampRight = (state: OverlayState, index: number) => Math.max(0, Math.min(rightCount(state) - 1, index));
 
-function rightCount(state: PopoverState): number {
+function rightCount(state: OverlayState): number {
 	const tracks = state.list.tracks.length;
 	if (state.source?.kind === "search") return 1 + tracks;
 	return tracks > 0 ? 2 + tracks + (hasLoadMore(state) ? 1 : 0) : 0;
 }
 
 /** Whether the right pane ends with the Load more row; search results are a single page. */
-export function hasLoadMore(state: PopoverState): boolean {
+export function hasLoadMore(state: OverlayState): boolean {
 	return (
 		state.list.status === "ready" &&
 		state.list.hasMore &&
@@ -420,17 +420,17 @@ export function hasLoadMore(state: PopoverState): boolean {
 }
 
 /** Right pane index of the Load more row, or -1. */
-export function loadMoreIndex(state: PopoverState): number {
+export function loadMoreIndex(state: OverlayState): number {
 	return hasLoadMore(state) ? trackOffset(state) + state.list.tracks.length : -1;
 }
 
 /** Index of the selected track, or -1 when the cursor is on an action or the input. */
-export function selectedTrack(state: PopoverState): number {
+export function selectedTrack(state: OverlayState): number {
 	const i = state.rightIndex - trackOffset(state);
 	return i >= 0 && i < state.list.tracks.length ? i : -1;
 }
 
-const emptyList = (): PopoverState["list"] => ({
+const emptyList = (): OverlayState["list"] => ({
 	status: "idle",
 	tracks: [],
 	error: null,
@@ -438,10 +438,10 @@ const emptyList = (): PopoverState["list"] => ({
 	hasMore: false,
 	more: null,
 });
-const loadingList = (id: number): PopoverState["list"] => ({ ...emptyList(), status: "loading", id });
+const loadingList = (id: number): OverlayState["list"] => ({ ...emptyList(), status: "loading", id });
 
-export function initPopover(init: PopoverInit): InitResult {
-	const state: PopoverState = {
+export function initOverlay(init: OverlayInit): InitResult {
+	const state: OverlayState = {
 		screen: init.account || init.anonymous ? "main" : "connect",
 		account: init.account,
 		anonymous: init.anonymous && !init.account,
@@ -484,7 +484,7 @@ const UNREADABLE: Notice = {
 };
 
 /** Where /yt opens with both tools: connect, the remembered place, or main. */
-function land(state: PopoverState, snapshot: PopoverSnapshot | null): InitResult {
+function land(state: OverlayState, snapshot: OverlaySnapshot | null): InitResult {
 	const scroll = { left: 0, right: 0 };
 	if (!state.account && !state.anonymous) return { state: { ...state, screen: "connect" }, effects: [], scroll };
 	if (snapshot && canRestore(state, snapshot)) return restore(state, snapshot);
@@ -494,8 +494,8 @@ function land(state: PopoverState, snapshot: PopoverSnapshot | null): InitResult
 const READY: Notice = { message: "✓ Ready", hint: "", tone: "success" };
 
 /** Both tools found on Dependencies: leave for where /yt would have opened, saying so. */
-function leaveGate(state: PopoverState): Result {
-	const base: PopoverState = { ...state, dialog: null, notice: { ...READY }, gate: { cursor: 0, snapshot: null } };
+function leaveGate(state: OverlayState): Result {
+	const base: OverlayState = { ...state, dialog: null, notice: { ...READY }, gate: { cursor: 0, snapshot: null } };
 	const out = land(base, state.gate.snapshot);
 	const restored = out.scroll.left > 0 || out.scroll.right > 0;
 	return {
@@ -508,17 +508,17 @@ const sameAccount = (a: Account | null, b: Account | null) => a?.browser === b?.
 const needsAccount = (source: SourceRef) => source.kind !== "queue" && source.kind !== "search";
 
 /** A remembered account-only source needs the same account connected now. */
-function canRestore(state: PopoverState, snapshot: PopoverSnapshot): boolean {
+function canRestore(state: OverlayState, snapshot: OverlaySnapshot): boolean {
 	return !needsAccount(snapshot.source) || (state.account !== null && sameAccount(state.account, snapshot.account));
 }
 
 /** Open main where the snapshot left it; lists come from the session cache through the usual load effects. */
-function restore(state: PopoverState, snapshot: PopoverSnapshot): InitResult {
+function restore(state: OverlayState, snapshot: OverlaySnapshot): InitResult {
 	const scroll = { left: Math.max(0, snapshot.scroll.left), right: Math.max(0, snapshot.scroll.right) };
 	const same = sameAccount(state.account, snapshot.account);
 	const playlistsOpen = snapshot.playlistsOpen && same && state.account !== null;
 	const leftKey = !same && snapshot.leftKey.startsWith("playlist:") ? sourceKey(snapshot.source) : snapshot.leftKey;
-	let base: PopoverState = { ...state, screen: "main", focus: snapshot.focus, leftKey };
+	let base: OverlayState = { ...state, screen: "main", focus: snapshot.focus, leftKey };
 	const effects: Effect[] = [];
 	if (playlistsOpen) {
 		const out = loadPlaylists(base, false);
@@ -539,8 +539,8 @@ function restore(state: PopoverState, snapshot: PopoverSnapshot): InitResult {
 	return { state: next, effects, scroll };
 }
 
-/** What to remember when the popover closes; the connect screen leaves nothing, Dependencies keeps the earlier one. */
-export function snapshotPopover(state: PopoverState, scroll: PaneScroll): PopoverSnapshot | null {
+/** What to remember when the overlay closes; the connect screen leaves nothing, Dependencies keeps the earlier one. */
+export function snapshotOverlay(state: OverlayState, scroll: PaneScroll): OverlaySnapshot | null {
 	// Closed on Dependencies: keep the place remembered before it.
 	if (state.screen === "dependencies") return state.gate.snapshot;
 	if (state.screen !== "main" || !state.source) return null;
@@ -560,13 +560,13 @@ export function snapshotPopover(state: PopoverState, scroll: PaneScroll): Popove
 }
 
 /** Land on main: Recommended with an account, search without. */
-function enterMain(state: PopoverState): Result {
+function enterMain(state: OverlayState): Result {
 	state = { ...state, screen: "main", focus: "left" };
 	if (state.account) return openSource({ ...state, leftKey: "recommended" }, { kind: "recommended" }, false);
 	return openSource({ ...state, leftKey: "search" }, { kind: "search" }, true);
 }
 
-function cancelPending(state: PopoverState): Effect[] {
+function cancelPending(state: OverlayState): Effect[] {
 	if (state.list.status === "loading") return [{ type: "cancel", id: state.list.id }];
 	return state.list.more !== null ? [{ type: "cancel", id: state.list.more }] : [];
 }
@@ -577,9 +577,9 @@ function pageRequest(source: SourceRef, page: PageRequest): LoadRequest | null {
 	return { kind: source.kind, ...page };
 }
 
-function openSource(state: PopoverState, source: SourceRef, focusRight: boolean, page: PageRequest = {}): Result {
+function openSource(state: OverlayState, source: SourceRef, focusRight: boolean, page: PageRequest = {}): Result {
 	const effects = cancelPending(state);
-	const base: PopoverState = {
+	const base: OverlayState = {
 		...state,
 		source,
 		accountMenu: null,
@@ -599,7 +599,7 @@ function openSource(state: PopoverState, source: SourceRef, focusRight: boolean,
 }
 
 /** Enter on Load more: fetch the page after the loaded tracks; it is appended when it arrives. */
-function loadMore(state: PopoverState): Result {
+function loadMore(state: OverlayState): Result {
 	const request = state.source && pageRequest(state.source, { start: state.list.tracks.length + 1 });
 	if (!request || state.list.more !== null) return { state, effects: [] };
 	const id = state.nextId;
@@ -610,12 +610,12 @@ function loadMore(state: PopoverState): Result {
 }
 
 /** r: reload the current source from page 1, bypassing the session cache. */
-function reload(state: PopoverState): Result {
+function reload(state: OverlayState): Result {
 	if (!state.source || !pageRequest(state.source, {})) return { state, effects: [] };
 	return openSource(state, state.source, false, { refresh: true });
 }
 
-function loadPlaylists(state: PopoverState, refresh: boolean): Result {
+function loadPlaylists(state: OverlayState, refresh: boolean): Result {
 	const id = state.nextId;
 	return {
 		state: {
@@ -628,7 +628,7 @@ function loadPlaylists(state: PopoverState, refresh: boolean): Result {
 	};
 }
 
-function startSearch(state: PopoverState): Result {
+function startSearch(state: OverlayState): Result {
 	const query = state.query.trim();
 	if (!query) return { state, effects: [] };
 	const effects = cancelPending(state);
@@ -640,7 +640,7 @@ function startSearch(state: PopoverState): Result {
 	};
 }
 
-function toConnect(state: PopoverState): Result {
+function toConnect(state: OverlayState): Result {
 	return {
 		state: {
 			...state,
@@ -653,7 +653,7 @@ function toConnect(state: PopoverState): Result {
 	};
 }
 
-function verify(state: PopoverState, target: number): Result {
+function verify(state: OverlayState, target: number): Result {
 	const browser = state.browsers[target];
 	const id = state.nextId;
 	return {
@@ -667,14 +667,14 @@ function verify(state: PopoverState, target: number): Result {
 }
 
 /** Back from the connect screen to main while an account is still saved; reloads a list or page cut off by toConnect. */
-function backToMain(state: PopoverState): Result {
-	const main: PopoverState = { ...state, screen: "main", focus: "left", leftKey: "account", accountMenu: null };
+function backToMain(state: OverlayState): Result {
+	const main: OverlayState = { ...state, screen: "main", focus: "left", leftKey: "account", accountMenu: null };
 	if (state.list.status === "loading" && state.source) return openSource(main, state.source, false);
 	if (state.list.more !== null) return loadMore({ ...main, list: { ...main.list, more: null } });
 	return { state: main, effects: [] };
 }
 
-function connectKey(state: PopoverState, key: Key): Result {
+function connectKey(state: OverlayState, key: Key): Result {
 	if (key === "esc") return state.account ? backToMain(state) : { state, effects: [{ type: "close" }] };
 	if (state.connect.phase === "verifying") return { state, effects: [] };
 	const options = connectOptions(state);
@@ -703,7 +703,7 @@ function connectKey(state: PopoverState, key: Key): Result {
 }
 
 /** Dependencies (S19): only the tool actions and Check again; esc closes. */
-function dependenciesKey(state: PopoverState, key: Key): Result {
+function dependenciesKey(state: OverlayState, key: Key): Result {
 	if (key === "esc") return { state, effects: [{ type: "close" }] };
 	const options = dependencyOptions(state);
 	const cursor = state.gate.cursor;
@@ -733,7 +733,7 @@ const SYSTEM_UPDATE: Notice = {
 const YTDLP_MISSING: Notice = { message: "yt-dlp not found", hint: "", action: "install" };
 
 /** Install yt-dlp: the confirmation, or straight to the reason when there is no official build. */
-function openInstall(state: PopoverState, retry: Retry | null): Result {
+function openInstall(state: OverlayState, retry: Retry | null): Result {
 	if (!state.setup?.ytDlp)
 		return {
 			state: {
@@ -745,7 +745,7 @@ function openInstall(state: PopoverState, retry: Retry | null): Result {
 	return { state: { ...state, dialog: { type: "confirm", cursor: 0, retry } }, effects: [] };
 }
 
-function startInstall(state: PopoverState, retry: Retry | null): Result {
+function startInstall(state: OverlayState, retry: Retry | null): Result {
 	if (!state.setup?.ytDlp) return openInstall(state, retry);
 	const id = state.nextId;
 	const total = state.setup.ytDlp.size;
@@ -756,7 +756,7 @@ function startInstall(state: PopoverState, retry: Retry | null): Result {
 }
 
 /** Update yt-dlp: runs on the managed copy; a system copy is the package manager's job. */
-function startUpdate(state: PopoverState, retry: Retry | null): Result {
+function startUpdate(state: OverlayState, retry: Retry | null): Result {
 	if (state.updating) return { state, effects: [] };
 	// Unknown tools (the check failed): the update effect looks at the real copy and reports what it finds.
 	const source = state.deps ? state.deps.ytDlp : undefined;
@@ -768,7 +768,7 @@ function startUpdate(state: PopoverState, retry: Retry | null): Result {
 }
 
 /** Run the load that failed before Update/Install yt-dlp, once, if it is still the one on screen. */
-function runRetry(state: PopoverState, retry: Retry | null): Result {
+function runRetry(state: OverlayState, retry: Retry | null): Result {
 	if (retry === "list" && state.list.status === "error" && state.source) {
 		return state.source.kind === "search" ? startSearch(state) : openSource(state, state.source, false);
 	}
@@ -777,7 +777,7 @@ function runRetry(state: PopoverState, retry: Retry | null): Result {
 	return { state, effects: [] };
 }
 
-function noticeAction(state: PopoverState, notice: Notice): Result {
+function noticeAction(state: OverlayState, notice: Notice): Result {
 	switch (notice.action) {
 		case "update":
 			return startUpdate(state, notice.retry ?? null);
@@ -799,7 +799,7 @@ function errorNotice(error: { kind: string; message: string; hint: string }, ret
 }
 const offersAction = (error: { kind: string }) => error.kind === "extract" || error.kind === "missing";
 
-function dialogKey(state: PopoverState, key: Key): Result {
+function dialogKey(state: OverlayState, key: Key): Result {
 	const dialog = state.dialog;
 	if (!dialog) return { state, effects: [] };
 	const close = { ...state, dialog: null };
@@ -832,19 +832,19 @@ function dialogKey(state: PopoverState, key: Key): Result {
 	}
 }
 
-function clampConnect(state: PopoverState): PopoverState {
+function clampConnect(state: OverlayState): OverlayState {
 	const last = Math.max(0, connectOptions(state).length - 1);
 	return state.connect.cursor > last ? { ...state, connect: { ...state.connect, cursor: last } } : state;
 }
 
 /** After a tool appears the rows above Check again shrink; the cursor keeps its row from the bottom. */
-function clampGate(state: PopoverState, before: number): PopoverState {
+function clampGate(state: OverlayState, before: number): OverlayState {
 	const count = dependencyOptions(state).length;
 	const cursor = Math.max(0, Math.min(count - 1, state.gate.cursor - (before - count)));
 	return { ...state, gate: { ...state.gate, cursor } };
 }
 
-function moveLeft(state: PopoverState, delta: number): PopoverState {
+function moveLeft(state: OverlayState, delta: number): OverlayState {
 	const keys = leftRows(state)
 		.filter(selectable)
 		.map((r) => r.key);
@@ -852,7 +852,7 @@ function moveLeft(state: PopoverState, delta: number): PopoverState {
 	return { ...state, leftKey: keys[Math.max(0, Math.min(keys.length - 1, at + delta))] };
 }
 
-function enterLeft(state: PopoverState): Result {
+function enterLeft(state: OverlayState): Result {
 	const row = leftRows(state)
 		.filter(selectable)
 		.find((r) => r.key === state.leftKey);
@@ -873,7 +873,7 @@ function enterLeft(state: PopoverState): Result {
 	return openSource(state, row.source, true);
 }
 
-function enterRight(state: PopoverState): Result {
+function enterRight(state: OverlayState): Result {
 	const { tracks } = state.list;
 	if (state.source?.kind === "search" && state.rightIndex === 0) return startSearch(state);
 	if (state.rightIndex === loadMoreIndex(state)) return loadMore(state);
@@ -890,7 +890,7 @@ function enterRight(state: PopoverState): Result {
 	};
 }
 
-function command(state: PopoverState, ch: string): Result {
+function command(state: OverlayState, ch: string): Result {
 	const volume = state.player?.volume ?? 100;
 	switch (ch) {
 		case " ":
@@ -923,7 +923,7 @@ function command(state: PopoverState, ch: string): Result {
 	}
 }
 
-function accountKey(state: PopoverState, key: Key): Result {
+function accountKey(state: OverlayState, key: Key): Result {
 	const cursor = state.accountMenu ?? 0;
 	switch (key) {
 		case "esc":
@@ -953,7 +953,7 @@ function accountKey(state: PopoverState, key: Key): Result {
 	}
 }
 
-function mainKey(state: PopoverState, key: Key): Result {
+function mainKey(state: OverlayState, key: Key): Result {
 	if (state.accountMenu !== null && state.focus === "right") return accountKey(state, key);
 	const searching = state.focus === "right" && state.source?.kind === "search";
 	if (typeof key === "object") {
@@ -986,13 +986,13 @@ function mainKey(state: PopoverState, key: Key): Result {
 }
 
 /** The track the right-pane cursor rests on in the main view: library lists, search results and Queue. */
-function dwellTrack(state: PopoverState): Track | null {
+function dwellTrack(state: OverlayState): Track | null {
 	if (state.screen !== "main" || state.focus !== "right" || state.dialog || state.accountMenu !== null) return null;
 	const index = selectedTrack(state);
 	return index >= 0 ? state.list.tracks[index] : null;
 }
 
-export function reduce(state: PopoverState, action: Action): Result {
+export function reduce(state: OverlayState, action: Action): Result {
 	let out = step(state, action);
 	// The update offer was answered (Update or Later): not again this session.
 	if (state.offer !== null && out.state.offer === null)
@@ -1003,10 +1003,10 @@ export function reduce(state: PopoverState, action: Action): Result {
 	return { state: out.state, effects: [...out.effects, { type: "dwell", track: after }] };
 }
 
-const playing = (state: PopoverState) => !!state.player?.running && !state.player.idle;
+const playing = (state: OverlayState) => !!state.player?.running && !state.player.idle;
 
 /** S23(1): a click does what the keys would on that element; targets of another screen are ignored. */
-function click(state: PopoverState, target: Target, ratio: number | undefined): Result {
+function click(state: OverlayState, target: Target, ratio: number | undefined): Result {
 	const none = { state, effects: [] };
 	const notice = state.notice;
 	const cleared = notice ? { ...state, notice: null } : state;
@@ -1039,7 +1039,7 @@ function click(state: PopoverState, target: Target, ratio: number | undefined): 
 		}
 		case "right": {
 			if (cleared.accountMenu !== null || target.index >= rightCount(cleared)) return none;
-			const focused: PopoverState = { ...cleared, focus: "right", rightIndex: target.index };
+			const focused: OverlayState = { ...cleared, focus: "right", rightIndex: target.index };
 			// The search input only takes focus; a track plays on a click once selected; actions run at once.
 			if (cleared.source?.kind === "search" && target.index === 0) return { state: focused, effects: [] };
 			if (selectedTrack(focused) >= 0 && !(state.focus === "right" && state.rightIndex === target.index))
@@ -1065,7 +1065,7 @@ function click(state: PopoverState, target: Target, ratio: number | undefined): 
 }
 
 /** S23(1): one wheel step moves the cursor of the pane under the pointer (focusing it), or of the open list. */
-function wheel(state: PopoverState, pane: "left" | "right" | null, delta: number): Result {
+function wheel(state: OverlayState, pane: "left" | "right" | null, delta: number): Result {
 	if (!delta) return { state, effects: [] };
 	const key: Key = delta < 0 ? "up" : "down";
 	if (!state.dialog && state.screen === "main") {
@@ -1076,24 +1076,24 @@ function wheel(state: PopoverState, pane: "left" | "right" | null, delta: number
 }
 
 /** The update offer is kept on connect and main (S25); never on Dependencies or while an update runs. */
-function offerUpdate(state: PopoverState, latest: string): Result {
+function offerUpdate(state: OverlayState, latest: string): Result {
 	if (state.screen === "dependencies" || state.updating) return { state, effects: [] };
 	return { state: { ...state, offer: latest }, effects: [] };
 }
 
 /** The update offer is on screen: no transient notice, update or dialog takes its row. */
-export function offerShown(state: PopoverState): boolean {
+export function offerShown(state: OverlayState): boolean {
 	return state.offer !== null && !state.notice && !state.updating && !state.dialog && state.screen !== "dependencies";
 }
 
 /** Update (`u`) or Later (`l`) on the offer; both end it for the session. */
-function answerOffer(state: PopoverState, update: boolean): Result {
+function answerOffer(state: OverlayState, update: boolean): Result {
 	const answered = { ...state, offer: null };
 	return update ? startUpdate(answered, null) : { state: answered, effects: [] };
 }
 
 /** `u` and `l` answer the offer while it shows, except typed into the search input (S25). */
-function offerKey(state: PopoverState, key: Key): boolean | null {
+function offerKey(state: OverlayState, key: Key): boolean | null {
 	if (typeof key !== "object" || (key.text !== "u" && key.text !== "l") || !offerShown(state)) return null;
 	const input =
 		state.screen === "main" &&
@@ -1104,7 +1104,7 @@ function offerKey(state: PopoverState, key: Key): boolean | null {
 	return input ? null : key.text === "u";
 }
 
-function step(state: PopoverState, action: Action): Result {
+function step(state: OverlayState, action: Action): Result {
 	switch (action.type) {
 		case "key": {
 			const cleared = state.notice ? { ...state, notice: null } : state;
@@ -1161,21 +1161,21 @@ function step(state: PopoverState, action: Action): Result {
 			const tracks = page ? [...state.list.tracks, ...result.tracks] : result.tracks;
 			const counts =
 				state.source.kind === "search" ? state.counts : { ...state.counts, [sourceKey(state.source)]: tracks.length };
-			const list: PopoverState["list"] = {
+			const list: OverlayState["list"] = {
 				...state.list,
 				status: "ready",
 				tracks,
 				hasMore: result.hasMore ?? false,
 				more: null,
 			};
-			const next: PopoverState = { ...state, counts, list, restoreIndex: null };
+			const next: OverlayState = { ...state, counts, list, restoreIndex: null };
 			const rightIndex = page ? state.rightIndex : clampRight(next, state.restoreIndex ?? 0);
 			return { state: { ...next, rightIndex }, effects: [] };
 		}
 		case "playlistsLoaded": {
 			if (state.playlists.status !== "loading" || action.id !== state.playlists.id) return { state, effects: [] };
 			const { result } = action;
-			const playlists: PopoverState["playlists"] = result.ok
+			const playlists: OverlayState["playlists"] = result.ok
 				? { status: "ready", items: result.playlists, error: null, id: action.id }
 				: { status: "error", items: [], error: result.error, id: action.id };
 			return {
@@ -1184,7 +1184,7 @@ function step(state: PopoverState, action: Action): Result {
 			};
 		}
 		case "player": {
-			let next: PopoverState = { ...state, player: action.state };
+			let next: OverlayState = { ...state, player: action.state };
 			if (state.source?.kind === "queue") {
 				const tracks = action.state.queue;
 				const last = Math.max(0, (tracks.length ? tracks.length + 2 : 0) - 1);
@@ -1217,7 +1217,7 @@ function step(state: PopoverState, action: Action): Result {
 				const error = { message: result.error.message, hint: result.error.hint };
 				return { state: { ...state, dialog: { type: "failed", error, cursor: 0, retry: dialog.retry } }, effects: [] };
 			}
-			const done: PopoverState = {
+			const done: OverlayState = {
 				...state,
 				dialog: null,
 				notice: { message: "✓ yt-dlp installed", hint: "", tone: "success" },
@@ -1229,7 +1229,7 @@ function step(state: PopoverState, action: Action): Result {
 			if (state.updating?.id !== action.id) return { state, effects: [] };
 			const { retry } = state.updating;
 			const { result } = action;
-			const base: PopoverState = { ...state, updating: null };
+			const base: OverlayState = { ...state, updating: null };
 			if (!result.ok)
 				return { state: { ...base, notice: { message: result.error.message, hint: result.error.hint } }, effects: [] };
 			return runRetry({ ...base, notice: { message: "yt-dlp is up to date.", hint: "", tone: "success" } }, retry);
@@ -1272,7 +1272,7 @@ function step(state: PopoverState, action: Action): Result {
 	}
 }
 
-/** Map raw terminal input to a popover key, using the host keybindings for the select keys. */
+/** Map raw terminal input to a overlay key, using the host keybindings for the select keys. */
 export function keyFromInput(data: string, matches: (data: string, id: string) => boolean): Key | undefined {
 	if (matches(data, "tui.select.up")) return "up";
 	if (matches(data, "tui.select.down")) return "down";

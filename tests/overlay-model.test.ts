@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { PlayerState } from "../lib/player.ts";
 import {
 	ACCOUNT_CHOICES,
 	type Action,
@@ -8,18 +7,19 @@ import {
 	dependencyOptions,
 	type Effect,
 	hasLoadMore,
-	initPopover,
+	initOverlay,
 	type Key,
 	keyFromInput,
 	leftRows,
 	loadMoreIndex,
-	type PopoverInit,
-	type PopoverState,
+	type OverlayInit,
+	type OverlayState,
 	reduce,
 	selectedTrack,
-	snapshotPopover,
+	snapshotOverlay,
 	type Target,
-} from "../lib/popover-model.ts";
+} from "../lib/overlay-model.ts";
+import type { PlayerState } from "../lib/player.ts";
 import type { Track } from "../lib/youtube-source.ts";
 
 const FIREFOX = {
@@ -56,8 +56,8 @@ const playerState = (over: Partial<PlayerState> = {}): PlayerState => ({
 	...over,
 });
 
-function init(over: Partial<PopoverInit> = {}) {
-	return initPopover({
+function init(over: Partial<OverlayInit> = {}) {
+	return initOverlay({
 		account: null,
 		anonymous: false,
 		browsers: [FIREFOX, CHROMIUM],
@@ -68,7 +68,7 @@ function init(over: Partial<PopoverInit> = {}) {
 }
 
 /** Apply actions in order, collecting every effect. */
-function run(state: PopoverState, ...actions: Action[]) {
+function run(state: OverlayState, ...actions: Action[]) {
 	const effects: Effect[] = [];
 	for (const action of actions) {
 		const out = reduce(state, action);
@@ -496,7 +496,7 @@ test("account choice: esc returns to main", () => {
 	assert.deepEqual(effects, []);
 });
 
-const rowCount = (state: PopoverState, key: string) => {
+const rowCount = (state: OverlayState, key: string) => {
 	const row = leftRows(state).find((r) => r.type === "source" && r.key === key);
 	return row && row.type === "source" ? row.count : undefined;
 };
@@ -630,7 +630,7 @@ const gateMissing = (...ks: Key[]) => run(init({ deps: MISSING_BOTH, setup: SETU
 
 // S19: the gate guarantees both tools on the connect screen, so it offers no tool rows.
 test("S19 connect options never include tool actions", () => {
-	const types = (deps: PopoverInit["deps"]) => connectOptions(init({ deps, setup: SETUP }).state).map((o) => o.type);
+	const types = (deps: OverlayInit["deps"]) => connectOptions(init({ deps, setup: SETUP }).state).map((o) => o.type);
 	assert.deepEqual(types({ mpv: true, ytDlp: "system" }), ["browser", "browser", "anonymous"]);
 	assert.deepEqual(types(null), ["browser", "browser", "anonymous"]);
 	assert.deepEqual(
@@ -938,7 +938,7 @@ test("S18 a snapshot restores source, pane, cursor and scroll, clamping the curs
 	});
 	const moved = run(loaded.state, ...keys("down", "down", "down", "down", "down", "down")).state;
 	assert.equal(moved.rightIndex, 6);
-	const snapshot = snapshotPopover(moved, { left: 1, right: 3 });
+	const snapshot = snapshotOverlay(moved, { left: 1, right: 3 });
 	assert.ok(snapshot);
 
 	const again = init({ account: ACCOUNT, snapshot });
@@ -973,7 +973,7 @@ test("S18 a search snapshot restores the query and results without searching aga
 		{ type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } },
 		...keys("down", "down"),
 	);
-	const snapshot = snapshotPopover(results.state, SCROLL);
+	const snapshot = snapshotOverlay(results.state, SCROLL);
 
 	const again = init({ anonymous: true, snapshot });
 	assert.deepEqual(again.effects, []);
@@ -997,7 +997,7 @@ test("S18 a snapshot restores expanded Playlists and the selected playlist", () 
 		result: { ok: true, playlists },
 	});
 	const picked = run(ready.state, ...keys("down", "enter", "left"));
-	const snapshot = snapshotPopover(picked.state, SCROLL);
+	const snapshot = snapshotOverlay(picked.state, SCROLL);
 
 	const again = init({ account: ACCOUNT, snapshot });
 	assert.equal(again.state.playlistsOpen, true);
@@ -1018,7 +1018,7 @@ test("S18 a snapshot restores expanded Playlists and the selected playlist", () 
 test("S18 a snapshot for an account source without that account falls back to the default", () => {
 	const start = init({ account: ACCOUNT });
 	const history = run(start.state, ...keys("down", "enter"));
-	const snapshot = snapshotPopover(history.state, { left: 0, right: 4 });
+	const snapshot = snapshotOverlay(history.state, { left: 0, right: 4 });
 
 	const anon = init({ anonymous: true, snapshot });
 	assert.equal(anon.state.leftKey, "search");
@@ -1033,13 +1033,13 @@ test("S18 a snapshot for an account source without that account falls back to th
 	const connect = init({ snapshot });
 	assert.equal(connect.state.screen, "connect");
 	assert.deepEqual(connect.effects, []);
-	assert.equal(snapshotPopover(connect.state, SCROLL), null, "the connect screen leaves nothing to remember");
+	assert.equal(snapshotOverlay(connect.state, SCROLL), null, "the connect screen leaves nothing to remember");
 });
 
 // ---- S19 dependencies gate ----
 
-const BOTH: PopoverInit["deps"] = { mpv: true, ytDlp: "system" };
-const GATED: [string, PopoverInit["deps"]][] = [
+const BOTH: OverlayInit["deps"] = { mpv: true, ytDlp: "system" };
+const GATED: [string, OverlayInit["deps"]][] = [
 	["yt-dlp missing", { mpv: true, ytDlp: null }],
 	["mpv missing", { mpv: false, ytDlp: "managed" }],
 	["both missing", MISSING_BOTH],
@@ -1055,13 +1055,13 @@ function historySnapshot() {
 		id: loadId(opened.effects),
 		result: { ok: true, tracks: many(10) },
 	});
-	return snapshotPopover(run(loaded.state, ...keys("down", "down", "down")).state, { left: 1, right: 2 })!;
+	return snapshotOverlay(run(loaded.state, ...keys("down", "down", "down")).state, { left: 1, right: 2 })!;
 }
 
 // S19: any missing tool opens Dependencies, whatever the account, the anonymous choice or a remembered place.
 test("S19 init with a missing tool opens the dependencies screen with no effects", () => {
 	const snapshot = historySnapshot();
-	const inits: [string, Partial<PopoverInit>][] = [
+	const inits: [string, Partial<OverlayInit>][] = [
 		["no account", {}],
 		["account", { account: ACCOUNT }],
 		["anonymous", { anonymous: true }],
@@ -1135,7 +1135,7 @@ test("S19 after Check again finds mpv, no account leaves for the connect screen 
 test("S19 a remembered snapshot is kept while gated and restored after ✓ Ready", () => {
 	const snapshot = historySnapshot();
 	const gated = init({ account: ACCOUNT, deps: { mpv: false, ytDlp: "system" }, snapshot });
-	assert.deepEqual(snapshotPopover(gated.state, SCROLL), snapshot, "closing on the gate keeps the snapshot");
+	assert.deepEqual(snapshotOverlay(gated.state, SCROLL), snapshot, "closing on the gate keeps the snapshot");
 	const checking = run(gated.state, ...keys("down", "enter"));
 	const ready = run(checking.state, { type: "deps", deps: BOTH });
 	assert.equal(ready.state.screen, "main");
@@ -1178,10 +1178,10 @@ test("S19 no key path from the dependencies screen starts a session", () => {
 		{ text: "r" },
 	];
 	const allowed = new Set(["install", "cancel", "checkTools", "copy", "close"]);
-	for (const over of [{}, { account: ACCOUNT }, { anonymous: true }] as Partial<PopoverInit>[]) {
+	for (const over of [{}, { account: ACCOUNT }, { anonymous: true }] as Partial<OverlayInit>[]) {
 		let frontier = [init({ ...over, deps: MISSING_BOTH, setup: SETUP }).state];
 		for (let depth = 0; depth < 4; depth++) {
-			const next: PopoverState[] = [];
+			const next: OverlayState[] = [];
 			for (const state of frontier)
 				for (const k of all) {
 					const out = reduce(state, { type: "key", key: k });
@@ -1323,7 +1323,7 @@ test("S23 the update offer is kept apart from the notices and is not offered on 
 // S23(1): clicks map to the same actions as the keys, per element type.
 test("S23 clicks select and open left rows, select then play tracks, and activate actions", () => {
 	const main = loadedMain().state;
-	const click = (state: PopoverState, target: Target, ratio?: number) =>
+	const click = (state: OverlayState, target: Target, ratio?: number) =>
 		run(state, { type: "click", target, ...(ratio === undefined ? {} : { ratio }) });
 
 	const history = click(main, { type: "left", key: "history" });

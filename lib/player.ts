@@ -207,6 +207,8 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 	let cursor = -1;
 	/** Bumped when play() starts; an older play() stops before touching mpv. */
 	let playGen = 0;
+	/** Settles with whether the newest play() was applied; an enqueue waits for it. */
+	let picking: Promise<boolean> | undefined;
 	let startCtl = new AbortController();
 	/** Bumped when indices may change (new queue, shuffle); pending swaps for older layouts are dropped. */
 	let layout = 0;
@@ -685,6 +687,15 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 			}
 
 			const gen = ++playGen;
+			let applied = false;
+			let done = (_: boolean) => {};
+			picking = new Promise<boolean>((resolve) => {
+				done = resolve;
+			});
+			const settled = () => {
+				if (gen === playGen) picking = undefined;
+				done(applied);
+			};
 			const start = Math.min(Math.max(0, startIndex), tracks.length - 1);
 			const first = tracks[start];
 			const previous = startCtl;
@@ -713,9 +724,10 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 					picked = undefined;
 					emit();
 				}
+				settled();
 				throw err;
 			}
-			if (gen !== playGen) return;
+			if (gen !== playGen) return settled();
 			try {
 				await locked(async () => {
 					queue = [...tracks];
@@ -738,6 +750,7 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 						ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "append", -1, titleOption(tracks[i].title)]));
 					for (let i = 0; i < start; i++)
 						ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "insert-at", i, titleOption(tracks[i].title)]));
+					applied = true;
 				});
 			} finally {
 				if (gen === playGen) {
@@ -745,13 +758,18 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 					picked = undefined;
 				}
 				emit();
+				settled();
 			}
 			prefetch();
 		},
 		async enqueue(track) {
+			// A pick still resolving goes first; an overtaken one hands over to the pick that wins.
+			let afterPick = false;
+			for (let wait = picking; wait; wait = picking) afterPick = await wait;
 			await ensureRunning();
 			await locked(async () => {
-				const reply = await send(["loadfile", track.url, "append-play", -1, titleOption(track.title)]);
+				const flag = afterPick ? "append" : "append-play";
+				const reply = await send(["loadfile", track.url, flag, -1, titleOption(track.title)]);
 				queue.push(track);
 				entries.push(track.url);
 				ids.push(entryIdOf(reply));

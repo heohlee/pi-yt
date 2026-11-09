@@ -1251,6 +1251,31 @@ test("S20 a second pick during the first pick's resolve sends stop", async () =>
 	}
 });
 
+// S20 (R3-001): a track enqueued while a pick resolves is neither played early nor dropped by the pick.
+test("R3-001 enqueue during a pending pick is appended after the picked track", async () => {
+	const fake = fakeResolver({ hold: ["id4", "id5", "id9"] });
+	const t = await setup({ resolver: fake.resolver });
+	try {
+		await t.player.ensureRunning();
+		const picked = [track(4), track(5)];
+		const playing = t.player.play(picked, 0);
+		await waitFor(() => fake.calls.includes("id4"), "pick resolve");
+		const queued = t.player.enqueue(track(9));
+		await settle();
+		assert.deepEqual(t.mpv.actions(), []);
+		fake.release("id4");
+		await Promise.all([playing, queued]);
+		assert.deepEqual(t.mpv.actions(), [
+			fast(picked[0], -1, "replace"),
+			watch(picked[1], "append"),
+			watch(track(9), "append"),
+		]);
+		assert.deepEqual(t.player.getState().queue, [...picked, track(9)]);
+	} finally {
+		await t.teardown();
+	}
+});
+
 // ---- S21 dwell pre-resolve ----
 
 // S21(3): a track prepared under the cursor plays from the shared cache, without resolving again.

@@ -51,7 +51,7 @@ Do not use for passive documentation or release copy with no test-behavior impac
 1. Read the existing tests for the area and reuse their fakes and helpers.
 2. Add a focused behavior test, observe its intended failure, then implement the smallest change. Preserve previous behavior through the public interface.
 3. Run the focused file first: `node --test tests/<area>.test.ts`. Filter one test with `node --test --test-name-pattern="<name>" tests/<area>.test.ts`.
-4. Run the closing gates CI runs: `npm test`, `npm run typecheck`, `npm run lint` and, for packaging changes, `npm pack --dry-run` (run `npm ci` once first).
+4. Run the closing gates CI runs: `npm run coverage` (the tests plus an 85% line, branch and function minimum for `lib/` and `extensions/`), `npm run typecheck`, `npm run lint` and, for packaging changes, `npm pack --dry-run` (run `npm ci` once first).
 5. Record exact commands, results, environmental limits and skipped gates. Documentation-only work needs proportionate structural checks, not invented test evidence.
 
 ## Output Contract

@@ -9,7 +9,7 @@
 ## Verification
 
 <!-- List commands and checks actually completed, with results:
-     npm test, npm run typecheck, npm run lint,
+     npm run coverage, npm run typecheck, npm run lint,
      and any manual check in Pi. -->
 
 ## Not verified

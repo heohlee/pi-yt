@@ -1,13 +1,13 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { existsSync, statSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { existsSync, statSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createPlayer, type PlayerDeps, type Track } from "../lib/player.ts";
+import { test } from "node:test";
 import { cookieArg } from "../lib/browsers.ts";
+import { createPlayer, type PlayerDeps, type Track } from "../lib/player.ts";
 import type { ResolveResult } from "../lib/resolver.ts";
 
 type Command = unknown[];
@@ -166,7 +166,9 @@ function fakeSpawn(mpv: ReturnType<typeof fakeMpv>, opts: { error?: NodeJS.Errno
 	return { spawn, calls, kills };
 }
 
-async function setup(extra: Partial<PlayerDeps> & { spawnOpts?: Parameters<typeof fakeSpawn>[1]; prelisten?: boolean } = {}) {
+async function setup(
+	extra: Partial<PlayerDeps> & { spawnOpts?: Parameters<typeof fakeSpawn>[1]; prelisten?: boolean } = {},
+) {
 	const dir = await mkdtemp(path.join(os.tmpdir(), "gsyt-player-"));
 	const socketPath = path.join(dir, "pi-yt", "mpv.sock");
 	const mpv = fakeMpv(socketPath);
@@ -269,7 +271,9 @@ test("S17 passes the resolved yt-dlp to mpv's ytdl hook when ytDlpPath returns o
 
 // S13: mpv passes Helium to yt-dlp as a Chromium profile path.
 test("S13 passes a Helium profile path to yt-dlp through mpv", async () => {
-	const t = await setup({ cookieArg: () => cookieArg({ id: "helium", profile: "/h/.config/net.imput.helium/Default" }) });
+	const t = await setup({
+		cookieArg: () => cookieArg({ id: "helium", profile: "/h/.config/net.imput.helium/Default" }),
+	});
 	try {
 		await t.player.ensureRunning();
 		assert.deepEqual(t.spawner.calls[0].args, [
@@ -293,7 +297,10 @@ test("S5 reuses a live mpv on the socket without spawning, and stop() does not q
 		await t.player.ensureRunning();
 		assert.equal(t.spawner.calls.length, 0);
 		await t.player.stop();
-		assert.equal(t.mpv.commands.some((c) => c[0] === "quit"), false);
+		assert.equal(
+			t.mpv.commands.some((c) => c[0] === "quit"),
+			false,
+		);
 		assert.equal(t.mpv.isListening(), true);
 		assert.equal(t.player.getState().running, false);
 	} finally {
@@ -587,14 +594,21 @@ test("S2/S5 setShuffle sends shuffle/unshuffle and reorders the mirror from mpv'
 		await t.player.setShuffle(true);
 		assert.deepEqual(t.mpv.actions().at(-1), ["playlist-shuffle"]);
 		assert.equal(t.player.getState().shuffle, true);
-		t.mpv.send("playlist", [{ filename: tracks[2].url }, { filename: tracks[0].url, current: true }, { filename: tracks[1].url }]);
+		t.mpv.send("playlist", [
+			{ filename: tracks[2].url },
+			{ filename: tracks[0].url, current: true },
+			{ filename: tracks[1].url },
+		]);
 		await waitFor(() => t.player.getState().queue[0]?.id === "id3", "reordered");
 		assert.deepEqual(t.player.getState().queue, [tracks[2], tracks[0], tracks[1]]);
 
 		await t.player.setShuffle(false);
 		assert.deepEqual(t.mpv.actions().at(-1), ["playlist-unshuffle"]);
 		assert.equal(t.player.getState().shuffle, false);
-		t.mpv.send("playlist", tracks.map((x) => ({ filename: x.url })));
+		t.mpv.send(
+			"playlist",
+			tracks.map((x) => ({ filename: x.url })),
+		);
 		await waitFor(() => t.player.getState().queue[0]?.id === "id1", "restored");
 		assert.deepEqual(t.player.getState().queue, tracks);
 	} finally {
@@ -636,7 +650,10 @@ test("S5 dispose() closes the socket without quitting mpv and leaves no timers",
 		await t.player.play([track(1)]);
 		t.player.dispose();
 		await new Promise((r) => setTimeout(r, 20));
-		assert.equal(t.mpv.commands.some((c) => c[0] === "quit"), false);
+		assert.equal(
+			t.mpv.commands.some((c) => c[0] === "quit"),
+			false,
+		);
 		assert.equal(t.mpv.isListening(), true);
 		assert.equal(t.player.getState().running, false);
 		assert.equal(t.timers.live.size, 0);
@@ -674,7 +691,13 @@ function fakeResolver(opts: { hold?: string[]; fail?: string[] } = {}) {
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 30));
-const fast = (t: Track, index: number, flag = "insert-at") => ["loadfile", stream(t), flag, index, `force-media-title=${t.title}`];
+const fast = (t: Track, index: number, flag = "insert-at") => [
+	"loadfile",
+	stream(t),
+	flag,
+	index,
+	`force-media-title=${t.title}`,
+];
 
 test("S15 play() resolves the start track first, loads its stream with the title, appends the rest as watch URLs", async () => {
 	const fake = fakeResolver({ hold: ["id1", "id2", "id3"] });
@@ -723,10 +746,7 @@ test("S15 a failed start resolve falls back to the watch URL through mpv's ytdl 
 	try {
 		const tracks = [track(1), track(2)];
 		await t.player.play(tracks);
-		assert.deepEqual(t.mpv.actions(), [
-			watch(tracks[0], "replace"),
-			watch(tracks[1], "append"),
-		]);
+		assert.deepEqual(t.mpv.actions(), [watch(tracks[0], "replace"), watch(tracks[1], "append")]);
 		assert.equal(t.player.getState().resolving, false);
 	} finally {
 		await t.teardown();
@@ -766,7 +786,10 @@ test("S15 never swaps the entry that is playing", async () => {
 		await settle();
 		const swaps = t.mpv.actions().filter((c) => c[2] === "insert-at");
 		assert.deepEqual(swaps, [fast(tracks[2], 2)]);
-		assert.equal(t.mpv.actions().some((c) => c[0] === "playlist-remove" && c[1] === 2), false);
+		assert.equal(
+			t.mpv.actions().some((c) => c[0] === "playlist-remove" && c[1] === 2),
+			false,
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -818,7 +841,10 @@ test("S15 a new queue cancels pending pre-resolves and never swaps the old track
 		assert.equal(fake.signals.get("id2")!.aborted, true);
 		fake.release("id2");
 		await settle();
-		assert.equal(t.mpv.actions().some((c) => c[1] === stream(track(2))), false);
+		assert.equal(
+			t.mpv.actions().some((c) => c[1] === stream(track(2))),
+			false,
+		);
 		assert.deepEqual(t.mpv.actions().at(-1), fast(track(4), -1, "replace"));
 	} finally {
 		await t.teardown();
@@ -858,7 +884,12 @@ test("S15 an mpv error on a swapped entry reloads its watch URL in place, once",
 			["playlist-play-index", 1],
 		]);
 		t.mpv.event({ event: "end-file", reason: "error", playlist_entry_id: id, file_error: "loading failed" });
-		t.mpv.event({ event: "end-file", reason: "error", playlist_entry_id: t.mpv.entryId(tracks[1].url), file_error: "x" });
+		t.mpv.event({
+			event: "end-file",
+			reason: "error",
+			playlist_entry_id: t.mpv.entryId(tracks[1].url),
+			file_error: "x",
+		});
 		t.mpv.event({ event: "end-file", reason: "eof", playlist_entry_id: t.mpv.entryId(stream(tracks[2])) });
 		t.mpv.send("playlist-pos", 0);
 		await settle();
@@ -886,7 +917,12 @@ test("S16(b) play() from index 1: an mpv error on the picked stream reloads it i
 		]);
 		t.mpv.send("playlist-pos", 1);
 		// mpv: the stream answers 403, the entry ends with an error and the next one starts.
-		t.mpv.event({ event: "end-file", reason: "error", playlist_entry_id: t.mpv.entryId(stream(tracks[1])), file_error: "loading failed" });
+		t.mpv.event({
+			event: "end-file",
+			reason: "error",
+			playlist_entry_id: t.mpv.entryId(stream(tracks[1])),
+			file_error: "loading failed",
+		});
 		t.mpv.send("playlist-pos", 2);
 		await waitFor(() => t.mpv.actions().length === 9, "reload");
 		assert.deepEqual(t.mpv.actions().slice(6), [
@@ -918,7 +954,11 @@ test("S15 media-title and stream filenames never change the mirror; shuffle stil
 		assert.equal(t.player.getState().title, "Title 1");
 		assert.equal(t.player.getState().artist, "Artist 1");
 
-		t.mpv.send("playlist", [{ filename: stream(tracks[2]) }, { filename: stream(tracks[0]) }, { filename: stream(tracks[1]) }]);
+		t.mpv.send("playlist", [
+			{ filename: stream(tracks[2]) },
+			{ filename: stream(tracks[0]) },
+			{ filename: stream(tracks[1]) },
+		]);
 		await waitFor(() => t.player.getState().queue[0]?.id === "id3", "reordered");
 		assert.deepEqual(t.player.getState().queue, [tracks[2], tracks[0], tracks[1]]);
 	} finally {
@@ -937,8 +977,14 @@ test("S15 skips a swap when mpv already plays the target entry, sending no inser
 		t.mpv.setPosition(1);
 		fake.release("id2");
 		await settle();
-		assert.equal(t.mpv.actions().some((c) => c[1] === stream(tracks[1])), false);
-		assert.equal(t.mpv.actions().some((c) => c[0] === "playlist-remove" && c[1] === 2), false);
+		assert.equal(
+			t.mpv.actions().some((c) => c[1] === stream(tracks[1])),
+			false,
+		);
+		assert.equal(
+			t.mpv.actions().some((c) => c[0] === "playlist-remove" && c[1] === 2),
+			false,
+		);
 		assert.deepEqual(t.mpv.commands.filter((c) => c[0] === "get_property").at(-1), ["get_property", "playlist"]);
 	} finally {
 		await t.teardown();
@@ -971,8 +1017,14 @@ test("S4/S15 forgetStreams() cancels pending resolves, never swaps their result 
 		assert.equal(fake.signals.get("id2")!.aborted, true);
 		fake.release("id2");
 		await settle();
-		assert.equal(t.mpv.actions().some((c) => c[1] === stream(track(2))), false);
-		assert.equal(t.mpv.commands.some((c) => c[0] === "quit" || c[0] === "stop"), false);
+		assert.equal(
+			t.mpv.actions().some((c) => c[1] === stream(track(2))),
+			false,
+		);
+		assert.equal(
+			t.mpv.commands.some((c) => c[0] === "quit" || c[0] === "stop"),
+			false,
+		);
 		assert.equal(t.player.getState().running, true);
 
 		// A start resolve that finishes after forgetStreams() plays the watch URL, not the old-session stream.
@@ -1027,7 +1079,10 @@ test("S4/S15 forgetStreams() while mpv is still starting never plays the old-ses
 		t.player.forgetStreams();
 		void t.mpv.listen();
 		await playing;
-		assert.deepEqual(t.mpv.actions().find((c) => c[0] === "loadfile"), watch(track(1), "replace"));
+		assert.deepEqual(
+			t.mpv.actions().find((c) => c[0] === "loadfile"),
+			watch(track(1), "replace"),
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -1045,11 +1100,14 @@ test("S4 forgetStreams() updates the running mpv's cookie option to the current 
 		cookie = undefined;
 		t.player.forgetStreams();
 		await waitFor(() => t.mpv.actions().filter((c) => c[0] === "change-list").length === 3, "drop cookies");
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "change-list"), [
-			["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"],
-			["change-list", "ytdl-raw-options", "append", "cookies-from-browser=chromium:/h/new"],
-			["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"],
-		]);
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "change-list"),
+			[
+				["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"],
+				["change-list", "ytdl-raw-options", "append", "cookies-from-browser=chromium:/h/new"],
+				["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"],
+			],
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -1068,9 +1126,10 @@ test("S4 forgetStreams() while mpv is starting switches its cookies once it is u
 		await starting;
 		await waitFor(() => t.mpv.actions().some((c) => c[0] === "change-list"), "drop cookies");
 		await settle();
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "change-list"), [
-			["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"],
-		]);
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "change-list"),
+			[["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"]],
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -1090,7 +1149,9 @@ test("S4 two quick forgetStreams() calls end with the current account's cookies"
 		await settle();
 		const changes = t.mpv.actions().filter((c) => c[0] === "change-list");
 		assert.deepEqual(changes.at(-1), ["change-list", "ytdl-raw-options", "remove", "cookies-from-browser"]);
-		assert.ok(!changes.some((c) => c[3] === "cookies-from-browser=chromium:/h/b" && changes.indexOf(c) === changes.length - 1));
+		assert.ok(
+			!changes.some((c) => c[3] === "cookies-from-browser=chromium:/h/b" && changes.indexOf(c) === changes.length - 1),
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -1123,7 +1184,10 @@ test("S20 a player never swaps or reloads entries in a playlist another player l
 
 		const picked = [track(5), track(6), track(7)];
 		await other.play(picked);
-		await waitFor(() => t.mpv.actionsBy(1).some((c) => c[0] === "playlist-remove" && c[1] === 3), "second player's swaps");
+		await waitFor(
+			() => t.mpv.actionsBy(1).some((c) => c[0] === "playlist-remove" && c[1] === 3),
+			"second player's swaps",
+		);
 		const before = t.mpv.actionsBy(0).length;
 
 		// mpv moves on in the new queue; the first player's links arrive late and its old stream reports an error.
@@ -1204,8 +1268,14 @@ test("S20 picking a track whose link is still being prepared reuses that resolve
 		assert.equal(fake.signals.get("id3")!.aborted, true);
 		fake.release("id2");
 		await playing;
-		assert.deepEqual(t.mpv.actions().find((c) => c[2] === "replace" && c[1] === stream(tracks[1])), fast(tracks[1], -1, "replace"));
-		assert.deepEqual(fake.calls.filter((id) => id === "id2"), ["id2"]);
+		assert.deepEqual(
+			t.mpv.actions().find((c) => c[2] === "replace" && c[1] === stream(tracks[1])),
+			fast(tracks[1], -1, "replace"),
+		);
+		assert.deepEqual(
+			fake.calls.filter((id) => id === "id2"),
+			["id2"],
+		);
 	} finally {
 		await t.teardown();
 	}
@@ -1291,14 +1361,17 @@ test("P-a1 enqueue during a pick overtaken by a second pick is appended after th
 		fake.release("id1");
 		await first;
 		await settle();
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [], "nothing loads before the winning pick");
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "loadfile"),
+			[],
+			"nothing loads before the winning pick",
+		);
 		fake.release("id4");
 		await Promise.all([second, queued]);
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [
-			fast(track(4), -1, "replace"),
-			watch(track(5), "append"),
-			watch(track(9), "append"),
-		]);
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "loadfile"),
+			[fast(track(4), -1, "replace"), watch(track(5), "append"), watch(track(9), "append")],
+		);
 		assert.deepEqual(t.player.getState().queue, [track(4), track(5), track(9)]);
 	} finally {
 		await t.teardown();
@@ -1345,11 +1418,10 @@ test("P-d two enqueues during one pick are appended in order", async () => {
 		const b = t.player.enqueue(track(9));
 		fake.release("id4");
 		await Promise.all([playing, a, b]);
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [
-			fast(track(4), -1, "replace"),
-			watch(track(8), "append"),
-			watch(track(9), "append"),
-		]);
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "loadfile"),
+			[fast(track(4), -1, "replace"), watch(track(8), "append"), watch(track(9), "append")],
+		);
 		assert.deepEqual(t.player.getState().queue, [track(4), track(8), track(9)]);
 	} finally {
 		await t.teardown();
@@ -1376,7 +1448,10 @@ test("S23 a resolver that throws synchronously falls back to the watch URL and s
 		await waitFor(() => outcome.length === 2, "pick and enqueue settle");
 		await Promise.all([playing, queued]);
 		assert.deepEqual(outcome, ["played", "enqueued"]);
-		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [watch(track(1), "replace"), watch(track(2), "append")]);
+		assert.deepEqual(
+			t.mpv.actions().filter((c) => c[0] === "loadfile"),
+			[watch(track(1), "replace"), watch(track(2), "append")],
+		);
 		assert.deepEqual(t.player.getState().queue, [track(1), track(2)]);
 		assert.equal(t.player.getState().resolving, false);
 	} finally {
@@ -1420,7 +1495,10 @@ test("S21 a second prepare() cancels the first, unless a pick is waiting for the
 		fake.release("id2");
 		await playing;
 		assert.deepEqual(t.mpv.actions().at(-1), fast(track(2), -1, "replace"));
-		assert.deepEqual(fake.calls.filter((id) => id === "id2"), ["id2"]);
+		assert.deepEqual(
+			fake.calls.filter((id) => id === "id2"),
+			["id2"],
+		);
 	} finally {
 		await t.teardown();
 	}

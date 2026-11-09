@@ -1,12 +1,28 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { initPopover, reduce, type Action, type Key, type PopoverInit, type PopoverState } from "../lib/popover-model.ts";
+import { test } from "node:test";
+import type { PlayerState } from "../lib/player.ts";
+import {
+	type Action,
+	initPopover,
+	type Key,
+	type PopoverInit,
+	type PopoverState,
+	reduce,
+} from "../lib/popover-model.ts";
 import { hitAt, paneAt, renderFrame, renderPopover, type ViewTheme } from "../lib/popover-view.ts";
 import { pad, stripAnsi, truncate, visibleWidth, wrap } from "../lib/text.ts";
-import type { PlayerState } from "../lib/player.ts";
 import type { Track } from "../lib/youtube-source.ts";
 
-const SGR: Record<string, number> = { accent: 36, muted: 37, dim: 90, success: 32, warning: 33, error: 31, text: 39, border: 34 };
+const SGR: Record<string, number> = {
+	accent: 36,
+	muted: 37,
+	dim: 90,
+	success: 32,
+	warning: 33,
+	error: 31,
+	text: 39,
+	border: 34,
+};
 const theme: ViewTheme = {
 	fg: (role, text) => `\x1b[${SGR[role] ?? 39}m${text}\x1b[39m`,
 	bold: (text) => `\x1b[1m${text}\x1b[22m`,
@@ -14,10 +30,20 @@ const theme: ViewTheme = {
 };
 const WIDTHS = [60, 80, 100, 140];
 
-const FIREFOX = { id: "firefox" as const, label: "Firefox", profileName: "default-release", profile: "default-release" };
+const FIREFOX = {
+	id: "firefox" as const,
+	label: "Firefox",
+	profileName: "default-release",
+	profile: "default-release",
+};
 const CHROMIUM = { id: "chromium" as const, label: "Chromium", profileName: "Default", profile: "Default" };
 const LONG_NAME = "A very long Chromium profile name for work";
-const LONG_PROFILE = { id: "chrome" as const, label: "Chrome", profileName: LONG_NAME.slice(0, 40), profile: "Profile 2" };
+const LONG_PROFILE = {
+	id: "chrome" as const,
+	label: "Chrome",
+	profileName: LONG_NAME.slice(0, 40),
+	profile: "Profile 2",
+};
 const ACCOUNT = { browser: "firefox" as const, profile: "default-release" };
 const SETUP = {
 	ytDlp: { version: "2026.10.26", size: 41166968, dir: "~/.local/share/pi-yt/bin" },
@@ -56,10 +82,24 @@ function apply(state: PopoverState, ...actions: Action[]) {
 const key = (k: Key): Action => ({ type: "key", key: k });
 
 function connectState(over: Partial<PopoverInit> = {}) {
-	return initPopover({ account: null, anonymous: false, browsers: [FIREFOX, CHROMIUM], deps: { mpv: true, ytDlp: "system" }, player: null, ...over }).state;
+	return initPopover({
+		account: null,
+		anonymous: false,
+		browsers: [FIREFOX, CHROMIUM],
+		deps: { mpv: true, ytDlp: "system" },
+		player: null,
+		...over,
+	}).state;
 }
 function mainState(over: Partial<PopoverInit> = {}, tracks: Track[] | null = TRACKS) {
-	const { state, effects } = initPopover({ account: ACCOUNT, anonymous: false, browsers: [], deps: null, player: null, ...over });
+	const { state, effects } = initPopover({
+		account: ACCOUNT,
+		anonymous: false,
+		browsers: [],
+		deps: null,
+		player: null,
+		...over,
+	});
 	if (!tracks) return state;
 	const load = effects.find((e) => e.type === "load") as { id: number };
 	return apply(state, { type: "loaded", id: load.id, result: { ok: true, tracks } });
@@ -71,7 +111,10 @@ const has = (lines: string[], text: string) => lines.some((l) => l.includes(text
 function assertFits(state: PopoverState, label: string) {
 	for (const width of WIDTHS) {
 		for (const line of render(state, width)) {
-			assert.ok(visibleWidth(line) <= width, `${label} @${width}: ${JSON.stringify(stripAnsi(line))} is ${visibleWidth(line)} wide`);
+			assert.ok(
+				visibleWidth(line) <= width,
+				`${label} @${width}: ${JSON.stringify(stripAnsi(line))} is ${visibleWidth(line)} wide`,
+			);
 		}
 	}
 }
@@ -108,7 +151,10 @@ test("connect screen shows the exact copy, browsers, anonymous option, deps and 
 // S3/S12: browser rows read `<Label>  <profileName>`; a long name truncates with … and keeps checking… visible.
 test("connect browser rows truncate long profile names", () => {
 	const state = connectState({ browsers: [LONG_PROFILE, FIREFOX] });
-	assert.match(plain(state, 140).find((l) => l.includes("Chrome"))!, new RegExp(`▸ Chrome\\s+${LONG_NAME.slice(0, 40)}\\s+│`));
+	assert.match(
+		plain(state, 140).find((l) => l.includes("Chrome"))!,
+		new RegExp(`▸ Chrome\\s+${LONG_NAME.slice(0, 40)}\\s+│`),
+	);
 	const row = plain(apply(state, key("enter")), 60).find((l) => l.includes("Chrome"))!;
 	assert.match(row, /▸ Chrome\s+A very long.*…\s+checking…\s+│$/);
 	assertFits(apply(state, key("enter")), "long profile verifying");
@@ -125,10 +171,34 @@ test("S19 the dependencies screen shows the exact title, rows and footer for eac
 	const YT_MISSING = "✗ yt-dlp   reads YouTube";
 	const MPV_MISSING = "✗ mpv      plays the audio";
 	const cases: [PopoverInit["deps"], [string, string][]][] = [
-		[{ mpv: false, ytDlp: null }, [[`▸ ${YT_MISSING}`, "Install yt-dlp"], [`  ${MPV_MISSING}`, "How to install mpv"]]],
-		[{ mpv: true, ytDlp: null }, [[`▸ ${YT_MISSING}`, "Install yt-dlp"], ["  ✓ mpv      plays the audio", ""]]],
-		[{ mpv: false, ytDlp: "system" }, [["  ✓ yt-dlp   reads YouTube", "(system)"], [`▸ ${MPV_MISSING}`, "How to install mpv"]]],
-		[{ mpv: false, ytDlp: "managed" }, [["  ✓ yt-dlp   reads YouTube", "(managed)"], [`▸ ${MPV_MISSING}`, "How to install mpv"]]],
+		[
+			{ mpv: false, ytDlp: null },
+			[
+				[`▸ ${YT_MISSING}`, "Install yt-dlp"],
+				[`  ${MPV_MISSING}`, "How to install mpv"],
+			],
+		],
+		[
+			{ mpv: true, ytDlp: null },
+			[
+				[`▸ ${YT_MISSING}`, "Install yt-dlp"],
+				["  ✓ mpv      plays the audio", ""],
+			],
+		],
+		[
+			{ mpv: false, ytDlp: "system" },
+			[
+				["  ✓ yt-dlp   reads YouTube", "(system)"],
+				[`▸ ${MPV_MISSING}`, "How to install mpv"],
+			],
+		],
+		[
+			{ mpv: false, ytDlp: "managed" },
+			[
+				["  ✓ yt-dlp   reads YouTube", "(managed)"],
+				[`▸ ${MPV_MISSING}`, "How to install mpv"],
+			],
+		],
 	];
 	for (const [deps, tools] of cases) {
 		const state = connectState({ deps, setup: SETUP });
@@ -136,15 +206,23 @@ test("S19 the dependencies screen shows the exact title, rows and footer for eac
 			const inner = width - 4;
 			const { title, body, footer } = bodyRows(state, width);
 			assert.equal(title, `YouTube${" ".repeat(inner - 7 - 12)}Dependencies`);
-			const rows = tools.map(([left, right]) => (right ? `${left}${" ".repeat(inner - left.length - right.length)}${right}` : left));
+			const rows = tools.map(([left, right]) =>
+				right ? `${left}${" ".repeat(inner - left.length - right.length)}${right}` : left,
+			);
 			assert.deepEqual(body, ["", ...rows, "", "  Check again"], `${JSON.stringify(deps)} @${width}`);
 			assert.equal(footer, "enter choose · esc close");
 		}
 		assertFits(state, `deps ${JSON.stringify(deps)}`);
 	}
 	const raw = render(connectState({ deps: { mpv: false, ytDlp: "managed" }, setup: SETUP }), 100);
-	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.dim}m(managed)`)), "(managed) is dim");
-	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.error}m✗`)), "✗ in error");
+	assert.ok(
+		raw.some((l) => l.includes(`\x1b[${SGR.dim}m(managed)`)),
+		"(managed) is dim",
+	);
+	assert.ok(
+		raw.some((l) => l.includes(`\x1b[${SGR.error}m✗`)),
+		"✗ in error",
+	);
 	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.dim}mDependencies`)));
 });
 
@@ -157,7 +235,8 @@ test("S19 the dependencies cursor reaches only actionable rows", () => {
 	assert.equal(bodyRows(apply(onCheck, key("down")), 100).body.at(-1), "▸ Check again", "Check again is the last stop");
 	assert.ok(bodyRows(apply(onCheck, key("up"), key("up")), 100).body[2].startsWith("▸ ✗ mpv"));
 	const lines = plain(gate, 100);
-	for (const text of ["Firefox", "Chromium", "Continue without an account", "Use the YouTube session", "found"]) assert.ok(!has(lines, text), text);
+	for (const text of ["Firefox", "Chromium", "Continue without an account", "Use the YouTube session", "found"])
+		assert.ok(!has(lines, text), text);
 	assertFits(onCheck, "check again");
 });
 
@@ -173,7 +252,10 @@ test("S19 ✓ Ready shows on the connect screen after the gate passes", () => {
 	const gate = apply(connectState({ deps: { mpv: false, ytDlp: "system" }, setup: SETUP }), key("down"), key("enter"));
 	const ready = apply(gate, { type: "deps", deps: { mpv: true, ytDlp: "system" } });
 	const raw = render(ready, 100);
-	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.success}m✓ Ready`)), raw.map(stripAnsi).join("\n"));
+	assert.ok(
+		raw.some((l) => l.includes(`\x1b[${SGR.success}m✓ Ready`)),
+		raw.map(stripAnsi).join("\n"),
+	);
 	assert.ok(has(plain(ready, 100), "not connected"));
 	assertFits(ready, "ready");
 });
@@ -231,12 +313,18 @@ test("left pane lists the sources in order with counts, ending with the account 
 	const lines = plain(mainState(), 120);
 	const order = ["Recommended", "History", "Watch later", "Liked videos", "▸ Playlists", "  Queue ", "› Search…"];
 	const rows = order.map((label) => lines.findIndex((l) => l.includes(label)));
-	assert.ok(rows.every((r, i) => r >= 0 && (i === 0 || r > rows[i - 1])), JSON.stringify(rows));
+	assert.ok(
+		rows.every((r, i) => r >= 0 && (i === 0 || r > rows[i - 1])),
+		JSON.stringify(rows),
+	);
 	assert.ok(lines[rows[6] + 1].includes("─────"), "rule right below Search…");
 	assert.match(lines[rows[6] + 2], /│ {3}Account · Firefox\s+│/);
 	assert.match(lines[rows[0]], /▸ Recommended\s+3 │/);
 
-	const anon = plain(apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")), 120);
+	const anon = plain(
+		apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
+		120,
+	);
 	const search = anon.findIndex((l) => l.includes("› Search…"));
 	assert.ok(anon[search + 1].includes("─────"));
 	assert.match(anon[search + 2], /│ {3}Connect an account\s+│/);
@@ -246,7 +334,12 @@ test("left pane lists the sources in order with counts, ending with the account 
 const leftColumn = (state: PopoverState) =>
 	plain(state, 120)
 		.slice(3, -3)
-		.map((l) => l.slice(2, 2 + 24).replace(/\s+/g, " ").trim())
+		.map((l) =>
+			l
+				.slice(2, 2 + 24)
+				.replace(/\s+/g, " ")
+				.trim(),
+		)
 		.filter(Boolean);
 
 // S18(2): YouTube's order on top, then Playlists, Queue, Search and the account row.
@@ -265,7 +358,10 @@ test("S18 left pane order is exact with an account and without one", () => {
 		rule,
 		"Account · Firefox",
 	]);
-	const anon = apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left"));
+	const anon = apply(
+		initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state,
+		key("left"),
+	);
 	assert.deepEqual(leftColumn(anon), [
 		"Recommended",
 		"History",
@@ -297,7 +393,10 @@ test("account choice shows the title, both options and its hint, and fits", () =
 	const onRow = apply(mainState(), ...Array.from({ length: 7 }, () => key("down")));
 	const state = apply(onRow, key("enter"));
 	const lines = plain(state, 120);
-	assert.ok(lines.some((l) => /│ Account · Firefox\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(
+		lines.some((l) => /│ Account · Firefox\s+│$/.test(l)),
+		lines.join("\n"),
+	);
 	assert.ok(lines.some((l) => /│ ▸ Use another browser\s+│$/.test(l)));
 	assert.ok(lines.some((l) => /│ {3}Disconnect\s+│$/.test(l)));
 	assert.ok(has(lines, "enter choose · esc back"));
@@ -314,7 +413,10 @@ test("right pane header, actions and track rows; the playing track is marked ♪
 	assert.match(lines.find((l) => l.includes("Recommended · 3"))!, /Recommended · 3\s+▸ ▶ Play all\s+⤮ Shuffle/);
 	const first = lines.find((l) => l.includes("Aruarian Dance") && l.includes("Artist 1"))!;
 	assert.match(first, /♪\s+Aruarian Dance\s+Artist 1\s+4:12/);
-	assert.match(lines.find((l) => l.includes("Time: The Donut"))!, / 2\s+Time: The Donut of the Heart\s+Artist 2\s+4:12/);
+	assert.match(
+		lines.find((l) => l.includes("Time: The Donut"))!,
+		/ 2\s+Time: The Donut of the Heart\s+Artist 2\s+4:12/,
+	);
 	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.accent}m♪`)));
 	assertFits(state, "main");
 });
@@ -331,7 +433,12 @@ test("right pane shows Loading…, Nothing here. and errors as message + hint wi
 		id,
 		result: {
 			ok: false,
-			error: { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp and retry.", detail: "SECRET-DETAIL" },
+			error: {
+				kind: "extract",
+				message: "yt-dlp could not read YouTube.",
+				hint: "Update yt-dlp and retry.",
+				detail: "SECRET-DETAIL",
+			},
 		},
 	});
 	const lines = plain(failed, 120);
@@ -343,7 +450,10 @@ test("right pane shows Loading…, Nothing here. and errors as message + hint wi
 
 // S2/S8: one notice line for player errors.
 test("player errors render as one notice line", () => {
-	const state = apply(mainState(), { type: "playerError", error: { message: "mpv not found", hint: "Install it: sudo pacman -S mpv" } });
+	const state = apply(mainState(), {
+		type: "playerError",
+		error: { message: "mpv not found", hint: "Install it: sudo pacman -S mpv" },
+	});
 	assert.ok(plain(state, 120).some((l) => /mpv not found\s+Install it: sudo pacman -S mpv/.test(l)));
 	assertFits(state, "notice");
 });
@@ -355,8 +465,14 @@ test("player row: playing, paused and nothing playing", () => {
 		const lines = plain(state, width);
 		return lines[lines.length - 2];
 	};
-	assert.match(row(playing()), /│ ⏮ ▶ ⏭ Aruarian Dance\s+Nujabes\s+━+\s+1:20\/4:12\s+⤮ on\s+vol 60%\s+tab pane · space ⏯ · n p track · , \. ±5s · esc/);
-	assert.match(row(playing({ paused: true, shuffle: false })), /│ ⏮ ⏸ ⏭ Aruarian Dance\s+Nujabes.*1:20\/4:12\s+⤮ off\s+vol 60%/);
+	assert.match(
+		row(playing()),
+		/│ ⏮ ▶ ⏭ Aruarian Dance\s+Nujabes\s+━+\s+1:20\/4:12\s+⤮ on\s+vol 60%\s+tab pane · space ⏯ · n p track · , \. ±5s · esc/,
+	);
+	assert.match(
+		row(playing({ paused: true, shuffle: false })),
+		/│ ⏮ ⏸ ⏭ Aruarian Dance\s+Nujabes.*1:20\/4:12\s+⤮ off\s+vol 60%/,
+	);
 	assert.match(row(null), /■ Nothing playing\s+tab pane · space ⏯ · n p track · , \. ±5s · esc/);
 	assert.match(row(playing({ idle: true })), /■ Nothing playing/);
 	for (const width of WIDTHS) assert.ok(visibleWidth(row(playing(), width)) <= width);
@@ -370,11 +486,15 @@ test("search pane shows the query input with a cursor and enter search", () => {
 	assert.ok(lines.some((l) => /› nujabes live█\s+enter search/.test(l)));
 	assert.ok(has(lines, "enter search · esc"));
 	const load = reduce(state, key("enter"));
-	state = apply(load.state, {
-		type: "loaded",
-		id: (load.effects.find((e) => e.type === "load") as { id: number }).id,
-		result: { ok: true, tracks: TRACKS },
-	}, key("down"));
+	state = apply(
+		load.state,
+		{
+			type: "loaded",
+			id: (load.effects.find((e) => e.type === "load") as { id: number }).id,
+			result: { ok: true, tracks: TRACKS },
+		},
+		key("down"),
+	);
 	lines = plain(state, 120);
 	assert.ok(has(lines, "Aruarian Dance"));
 	assert.ok(has(lines, "enter play · a queue · n p track · , . ±5s · esc"));
@@ -404,7 +524,10 @@ test("long lists scroll to keep the selection visible", () => {
 	for (let i = 0; i < 50; i++) state = apply(state, key("down"));
 	const lines = plain(state, 120, 20);
 	assert.equal(lines.length <= 20, true);
-	assert.ok(lines.some((l) => /▸\s+49\s+Song 49/.test(l)), lines.join("\n"));
+	assert.ok(
+		lines.some((l) => /▸\s+49\s+Song 49/.test(l)),
+		lines.join("\n"),
+	);
 	assert.ok(!has(lines, "Song 1 "));
 });
 
@@ -414,18 +537,34 @@ test("every line fits at 60, 80, 100 and 140 columns across states", () => {
 		["connect", connectState()],
 		["long profile", connectState({ browsers: [LONG_PROFILE, { ...FIREFOX, profileName: "p".repeat(200) }] })],
 		["loading", mainState({}, null)],
-		["long", apply(mainState({ player: playing({ title: "x".repeat(300), artist: "y".repeat(80) }) }, long), key("tab"))],
+		[
+			"long",
+			apply(mainState({ player: playing({ title: "x".repeat(300), artist: "y".repeat(80) }) }, long), key("tab")),
+		],
 		["anon", initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state],
-		["anon left", apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left"))],
+		[
+			"anon left",
+			apply(initPopover({ account: null, anonymous: true, browsers: [], deps: null, player: null }).state, key("left")),
+		],
 	];
 	for (const [label, state] of states) assertFits(state, label);
 });
 
 /** Recommended with a full first page, focus right, cursor on Load more. */
 function pagedState() {
-	const { state, effects } = initPopover({ account: ACCOUNT, anonymous: false, browsers: [], deps: null, player: null });
+	const { state, effects } = initPopover({
+		account: ACCOUNT,
+		anonymous: false,
+		browsers: [],
+		deps: null,
+		player: null,
+	});
 	const load = effects.find((e) => e.type === "load") as { id: number };
-	const loaded = apply(state, { type: "loaded", id: load.id, result: { ok: true, tracks: TRACKS, hasMore: true } }, key("tab"));
+	const loaded = apply(
+		state,
+		{ type: "loaded", id: load.id, result: { ok: true, tracks: TRACKS, hasMore: true } },
+		key("tab"),
+	);
 	return apply(loaded, ...Array.from({ length: 5 }, () => key("down")));
 }
 
@@ -433,7 +572,10 @@ function pagedState() {
 test("S14 Load more and Loading more… rows follow the tracks and fit", () => {
 	const idle = apply(pagedState(), key("up"));
 	const raw = render(idle, 120);
-	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.dim}m  Load more\x1b[39m`)), raw.map(stripAnsi).join("\n"));
+	assert.ok(
+		raw.some((l) => l.includes(`\x1b[${SGR.dim}m  Load more\x1b[39m`)),
+		raw.map(stripAnsi).join("\n"),
+	);
 	const at = raw.map(stripAnsi).findIndex((l) => l.includes("Load more"));
 	assert.ok(stripAnsi(raw[at - 1]).includes("South of the River"), "Load more is right after the last track");
 	assertFits(idle, "load more");
@@ -456,9 +598,16 @@ test("S14 Load more and Loading more… rows follow the tracks and fit", () => {
 test("S14 appended tracks continue the numbering", () => {
 	const loading = reduce(pagedState(), key("enter"));
 	const more = (loading.effects.find((e) => e.type === "load") as { id: number }).id;
-	const state = apply(loading.state, { type: "loaded", id: more, result: { ok: true, tracks: [track(4, "Feather")], hasMore: false } });
+	const state = apply(loading.state, {
+		type: "loaded",
+		id: more,
+		result: { ok: true, tracks: [track(4, "Feather")], hasMore: false },
+	});
 	const lines = plain(state, 120);
-	assert.ok(lines.some((l) => / 4\s+Feather\s+Artist 4/.test(l)), lines.join("\n"));
+	assert.ok(
+		lines.some((l) => / 4\s+Feather\s+Artist 4/.test(l)),
+		lines.join("\n"),
+	);
 	assert.ok(has(lines, "Recommended · 4"));
 	assert.ok(!has(lines, "Load more"));
 });
@@ -492,12 +641,18 @@ test("S17 the Install yt-dlp confirmation shows the exact rows and options", () 
 		"License   Unlicense",
 		"Nothing is installed system-wide and no sudo is needed.",
 	])
-		assert.ok(lines.some((l) => new RegExp(`│ ${row.replace(/[()~.]/g, "\\$&")}\\s+│$`).test(l)), `${row}\n${lines.join("\n")}`);
+		assert.ok(
+			lines.some((l) => new RegExp(`│ ${row.replace(/[()~.]/g, "\\$&")}\\s+│$`).test(l)),
+			`${row}\n${lines.join("\n")}`,
+		);
 	assert.ok(lineMatching(lines, /│ ▸ Install\s+│$/));
 	assert.ok(lineMatching(lines, /│ {3}Cancel\s+│$/));
 	assert.ok(has(lines, "enter choose · esc cancel"));
 	assertFits(confirmState(), "confirm");
-	const unknownSize = apply(connectState({ deps: MISSING, setup: { ...SETUP, ytDlp: { ...SETUP.ytDlp, size: null } } }), key("enter"));
+	const unknownSize = apply(
+		connectState({ deps: MISSING, setup: { ...SETUP, ytDlp: { ...SETUP.ytDlp, size: null } } }),
+		key("enter"),
+	);
 	assert.ok(!has(plain(unknownSize, 100), "Size"));
 });
 
@@ -505,16 +660,34 @@ test("S17 the Install yt-dlp confirmation shows the exact rows and options", () 
 test("S17 the download shows progress in MB with esc cancel, then Verifying…", () => {
 	const { state, effects } = reduce(confirmState(), key("enter"));
 	const id = (effects[0] as { id: number }).id;
-	const half = apply(state, { type: "installProgress", id, progress: { phase: "download", received: 20_583_484, total: 41_166_968 } });
+	const half = apply(state, {
+		type: "installProgress",
+		id,
+		progress: { phase: "download", received: 20_583_484, total: 41_166_968 },
+	});
 	const lines = plain(half, 100);
 	assert.ok(lineMatching(lines, /│ Downloading yt-dlp {2}━+ {2}20\.6\/41\.2 MB\s+│$/), lines.join("\n"));
 	assert.ok(has(lines, "esc cancel"));
 	const raw = render(half, 100).join("\n");
-	assert.ok(raw.includes(`\x1b[${SGR.accent}m━`) && raw.includes(`\x1b[${SGR.dim}m━`), "bar shows filled and empty parts");
+	assert.ok(
+		raw.includes(`\x1b[${SGR.accent}m━`) && raw.includes(`\x1b[${SGR.dim}m━`),
+		"bar shows filled and empty parts",
+	);
 	assertFits(half, "download");
-	const unknown = apply(state, { type: "installProgress", id, progress: { phase: "download", received: 3_000_000, total: null } });
-	const sized = apply(connectState({ deps: MISSING, setup: { ...SETUP, ytDlp: { ...SETUP.ytDlp, size: null } } }), key("enter"));
-	const unknownTotal = apply(reduce(sized, key("enter")).state, { type: "installProgress", id: id, progress: { phase: "download", received: 3_000_000, total: null } });
+	const unknown = apply(state, {
+		type: "installProgress",
+		id,
+		progress: { phase: "download", received: 3_000_000, total: null },
+	});
+	const sized = apply(
+		connectState({ deps: MISSING, setup: { ...SETUP, ytDlp: { ...SETUP.ytDlp, size: null } } }),
+		key("enter"),
+	);
+	const unknownTotal = apply(reduce(sized, key("enter")).state, {
+		type: "installProgress",
+		id: id,
+		progress: { phase: "download", received: 3_000_000, total: null },
+	});
 	assert.ok(has(plain(unknownTotal, 100), "Downloading yt-dlp  3.0 MB"), plain(unknownTotal, 100).join("\n"));
 	assert.ok(has(plain(unknown, 100), "/41.2 MB"));
 	const verifying = apply(half, { type: "installProgress", id, progress: { phase: "verify" } });
@@ -526,17 +699,27 @@ test("S17 the download shows progress in MB with esc cancel, then Verifying…",
 test("S17 install success and failure screens", () => {
 	const { state, effects } = reduce(confirmState(), key("enter"));
 	const id = (effects[0] as { id: number }).id;
-	const done = apply(state, { type: "installed", id, result: { ok: true } }, { type: "deps", deps: { mpv: false, ytDlp: "managed" } });
+	const done = apply(
+		state,
+		{ type: "installed", id, result: { ok: true } },
+		{ type: "deps", deps: { mpv: false, ytDlp: "managed" } },
+	);
 	const lines = plain(done, 100);
 	assert.ok(has(lines, "✓ yt-dlp installed"));
-	assert.ok(lines.some((l) => /✓ yt-dlp {3}reads YouTube\s+\(managed\)/.test(l)), lines.join("\n"));
+	assert.ok(
+		lines.some((l) => /✓ yt-dlp {3}reads YouTube\s+\(managed\)/.test(l)),
+		lines.join("\n"),
+	);
 	assert.ok(!has(lines, "✗ yt-dlp"));
 	assert.ok(render(done, 100).some((l) => l.includes(`\x1b[${SGR.success}m✓ yt-dlp installed`)));
 
 	const failed = apply(state, {
 		type: "installed",
 		id,
-		result: { ok: false, error: { kind: "network", message: "Could not download yt-dlp.", hint: "Check your connection and retry." } },
+		result: {
+			ok: false,
+			error: { kind: "network", message: "Could not download yt-dlp.", hint: "Check your connection and retry." },
+		},
 	});
 	const fl = plain(failed, 100);
 	assert.ok(has(fl, "Could not download yt-dlp.") && has(fl, "Check your connection and retry."));
@@ -550,7 +733,10 @@ test("S17 install success and failure screens", () => {
 test("S17 How to install mpv screen, with the copy notices", () => {
 	const help = apply(connectState({ deps: MISSING, setup: SETUP }), key("down"), key("enter"));
 	const lines = plain(help, 100);
-	assert.ok(lineMatching(lines, /│ mpv plays the audio\. Install it with your package manager:\s+│$/), lines.join("\n"));
+	assert.ok(
+		lineMatching(lines, /│ mpv plays the audio\. Install it with your package manager:\s+│$/),
+		lines.join("\n"),
+	);
 	assert.ok(lineMatching(lines, /│ {3}sudo pacman -S mpv\s+│$/));
 	assert.ok(lineMatching(lines, /│ ▸ Copy command\s+│$/) && lineMatching(lines, /│ {3}Check again\s+│$/));
 	assert.ok(has(plain(apply(help, { type: "copied", ok: true }), 100), "Copied."));
@@ -558,7 +744,13 @@ test("S17 How to install mpv screen, with the copy notices", () => {
 	assertFits(help, "mpv help");
 
 	const fallback = apply(
-		connectState({ deps: MISSING, setup: { ...SETUP, mpv: { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" } } }),
+		connectState({
+			deps: MISSING,
+			setup: {
+				...SETUP,
+				mpv: { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" },
+			},
+		}),
 		key("down"),
 		key("enter"),
 	);
@@ -570,7 +762,10 @@ test("S17 How to install mpv screen, with the copy notices", () => {
 
 /** Main with an account and the account choice open. */
 function accountChoice(ytDlp: "managed" | "system" | null) {
-	const onRow = apply(mainState({ deps: { mpv: true, ytDlp }, setup: SETUP }), ...Array.from({ length: 7 }, () => key("down")));
+	const onRow = apply(
+		mainState({ deps: { mpv: true, ytDlp }, setup: SETUP }),
+		...Array.from({ length: 7 }, () => key("down")),
+	);
 	return apply(onRow, key("enter"));
 }
 
@@ -578,8 +773,14 @@ function accountChoice(ytDlp: "managed" | "system" | null) {
 test("S23 Account has no Update yt-dlp; the offer reads `yt-dlp <new> available  ▸ Update (u) · Later (l)` and updates", () => {
 	const menu = accountChoice("managed");
 	assert.ok(!has(plain(menu, 120), "Update yt-dlp"), plain(menu, 120).join("\n"));
-	const offer = apply(mainState({ deps: { mpv: true, ytDlp: "managed" }, setup: SETUP }), { type: "updateAvailable", latest: "2026.11.05" });
-	assert.ok(lineMatching(plain(offer, 120), /│ yt-dlp 2026\.11\.05 available {2}▸ Update \(u\) · Later \(l\)\s+│$/), plain(offer, 120).join("\n"));
+	const offer = apply(mainState({ deps: { mpv: true, ytDlp: "managed" }, setup: SETUP }), {
+		type: "updateAvailable",
+		latest: "2026.11.05",
+	});
+	assert.ok(
+		lineMatching(plain(offer, 120), /│ yt-dlp 2026\.11\.05 available {2}▸ Update \(u\) · Later \(l\)\s+│$/),
+		plain(offer, 120).join("\n"),
+	);
 	assertFits(offer, "update offer");
 	const updating = apply(offer, key({ text: "u" }));
 	assert.ok(has(plain(updating, 120), "Updating yt-dlp…"));
@@ -588,17 +789,32 @@ test("S23 Account has no Update yt-dlp; the offer reads `yt-dlp <new> available 
 
 // S17/S8: action notices read `<message>  ▸ <action>`.
 test("S17 extract and mpv-missing notices offer their action", () => {
-	const start = initPopover({ account: ACCOUNT, anonymous: false, browsers: [], deps: { mpv: true, ytDlp: "managed" }, player: null });
+	const start = initPopover({
+		account: ACCOUNT,
+		anonymous: false,
+		browsers: [],
+		deps: { mpv: true, ytDlp: "managed" },
+		player: null,
+	});
 	const id = (start.effects[0] as { id: number }).id;
 	const failed = apply(start.state, {
 		type: "loaded",
 		id,
-		result: { ok: false, error: { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp and retry." } },
+		result: {
+			ok: false,
+			error: { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp and retry." },
+		},
 	});
-	assert.ok(plain(failed, 120).some((l) => /│ yt-dlp could not read YouTube\.\s+▸ Update yt-dlp\s+│$/.test(l)), plain(failed, 120).join("\n"));
+	assert.ok(
+		plain(failed, 120).some((l) => /│ yt-dlp could not read YouTube\.\s+▸ Update yt-dlp\s+│$/.test(l)),
+		plain(failed, 120).join("\n"),
+	);
 	assertFits(failed, "extract notice");
 
-	const mpv = apply(mainState(), { type: "playerError", error: { kind: "missing", message: "mpv not found", hint: "Install it." } });
+	const mpv = apply(mainState(), {
+		type: "playerError",
+		error: { kind: "missing", message: "mpv not found", hint: "Install it." },
+	});
 	assert.ok(plain(mpv, 120).some((l) => /│ mpv not found\s+▸ How to install mpv\s+│$/.test(l)));
 	assertFits(mpv, "mpv notice");
 	const help = apply(mpv, key("enter"));
@@ -623,7 +839,8 @@ test("S20 player row shows the picked track with Loading… while it resolves", 
 
 /** Plain text of `line` between columns x (inclusive) and end (exclusive); fixtures use one-column glyphs. */
 const cols = (line: string, x: number, end: number) => Array.from(stripAnsi(line)).slice(x, end).join("");
-const frame = (state: PopoverState, width: number, height = 30, hover?: string) => renderFrame(state, { width, height, theme, hover });
+const frame = (state: PopoverState, width: number, height = 30, hover?: string) =>
+	renderFrame(state, { width, height, theme, hover });
 
 /** Every expected hit exists, sits on its own text, and every hit stays inside the card. */
 function assertHits(state: PopoverState, width: number, expected: Record<string, string>, height = 30) {
@@ -635,7 +852,10 @@ function assertHits(state: PopoverState, width: number, expected: Record<string,
 	for (const [id, text] of Object.entries(expected)) {
 		const hit = f.hits.find((h) => h.id === id);
 		assert.ok(hit, `${id} @${width}: ${f.hits.map((h) => h.id).join(", ")}`);
-		assert.ok(cols(f.lines[hit.y], hit.x, hit.end).includes(text), `${id} @${width}: ${JSON.stringify(cols(f.lines[hit.y], hit.x, hit.end))}`);
+		assert.ok(
+			cols(f.lines[hit.y], hit.x, hit.end).includes(text),
+			`${id} @${width}: ${JSON.stringify(cols(f.lines[hit.y], hit.x, hit.end))}`,
+		);
 	}
 	return f;
 }
@@ -672,7 +892,10 @@ test("S23 left and right rows, actions and player controls get hit regions over 
 	assert.equal(narrow.hits.find((h) => h.id === "left:history")!.x, 2);
 	const narrowRight = assertHits(apply(state, key("tab")), 60, { "right:2": "Aruarian Dance" });
 	assert.equal(narrowRight.hits.find((h) => h.id === "right:2")!.x, 2);
-	assert.deepEqual(narrowRight.panes.map((p) => p.pane), ["right"]);
+	assert.deepEqual(
+		narrowRight.panes.map((p) => p.pane),
+		["right"],
+	);
 });
 
 test("S23 search input, Load more, scrolled rows, account choices and the playlists rows get hits", () => {
@@ -684,19 +907,27 @@ test("S23 search input, Load more, scrolled rows, account choices and the playli
 	for (let i = 0; i < 50; i++) scrolled = apply(scrolled, key("down"));
 	assertHits(scrolled, 120, { "right:49": "Song 48", "right:50": "Song 49" }, 20);
 	const menu = accountChoice("managed");
-	for (const width of WIDTHS) assertHits(menu, width, { "account:0": "Use another browser", "account:1": "Disconnect" });
+	for (const width of WIDTHS)
+		assertHits(menu, width, { "account:0": "Use another browser", "account:1": "Disconnect" });
 });
 
 test("S23 connect options, Dependencies rows, dialog buttons and notice actions get hits", () => {
 	for (const width of WIDTHS) {
-		assertHits(connectState(), width, { "connect:0": "Firefox", "connect:1": "Chromium", "connect:2": "Continue without an account" });
+		assertHits(connectState(), width, {
+			"connect:0": "Firefox",
+			"connect:1": "Chromium",
+			"connect:2": "Continue without an account",
+		});
 		assertHits(connectState({ deps: MISSING, setup: SETUP }), width, {
 			"dependency:0": "Install yt-dlp",
 			"dependency:1": "How to install mpv",
 			"dependency:2": "Check again",
 		});
 		assertHits(confirmState(), width, { "dialog:0": "Install", "dialog:1": "Cancel" });
-		const offer = apply(mainState({ deps: { mpv: true, ytDlp: "managed" } }), { type: "updateAvailable", latest: "2026.11.05" });
+		const offer = apply(mainState({ deps: { mpv: true, ytDlp: "managed" } }), {
+			type: "updateAvailable",
+			latest: "2026.11.05",
+		});
 		const f = assertHits(offer, width, { "notice:action": "▸ Update (u)", "notice:later": "Later (l)" });
 		const text = (id: string) => {
 			const hit = f.hits.find((h) => h.id === id)!;
@@ -704,7 +935,10 @@ test("S23 connect options, Dependencies rows, dialog buttons and notice actions 
 		};
 		assert.equal(text("notice:action"), "▸ Update (u)");
 		assert.equal(text("notice:later"), "Later (l)");
-		const mpv = apply(mainState(), { type: "playerError", error: { kind: "missing", message: "mpv not found", hint: "" } });
+		const mpv = apply(mainState(), {
+			type: "playerError",
+			error: { kind: "missing", message: "mpv not found", hint: "" },
+		});
 		assertHits(mpv, width, { "notice:action": "▸ How to install mpv" });
 	}
 });
@@ -762,7 +996,10 @@ const offerRow = (lines: string[]) => lines.find((l) => l.includes("▸ Update (
 test("S25 the offer reads `yt-dlp <latest> available  ▸ Update (u) · Later (l)` and fits 60/80/100/140", () => {
 	for (const width of WIDTHS) {
 		const lines = plain(offerState(), width);
-		assert.ok(lineMatching(lines, new RegExp(`^│ ${OFFER_LINE.replace(/[.()]/g, "\\$&")}\\s+│$`)), `${width}\n${lines.join("\n")}`);
+		assert.ok(
+			lineMatching(lines, new RegExp(`^│ ${OFFER_LINE.replace(/[.()]/g, "\\$&")}\\s+│$`)),
+			`${width}\n${lines.join("\n")}`,
+		);
 		const long = plain(offerState(`2026.11.05.${"9".repeat(100)}`), width);
 		const row = offerRow(long) ?? "";
 		assert.ok(row.endsWith("▸ Update (u) · Later (l) │") && row.includes("…"), `${width}: ${row}`);
@@ -783,25 +1020,37 @@ test("S25 the offer is still shown after moving, searching and playing", () => {
 		key({ text: "/" }),
 		key({ text: "x" }),
 	);
-	for (const width of WIDTHS) assert.ok(has(plain(used, width), OFFER_LINE), `${width}\n${plain(used, width).join("\n")}`);
+	for (const width of WIDTHS)
+		assert.ok(has(plain(used, width), OFFER_LINE), `${width}\n${plain(used, width).join("\n")}`);
 });
 
 // S25: a transient error takes the notice row; the offer comes back once the error closes.
 test("S25 a transient error shows over the offer and the offer returns after the error closes", () => {
-	const error = apply(offerState(), { type: "playerError", error: { message: "Playback failed.", hint: "Try again from /yt." } });
+	const error = apply(offerState(), {
+		type: "playerError",
+		error: { message: "Playback failed.", hint: "Try again from /yt." },
+	});
 	assert.ok(has(plain(error, 120), "Playback failed."));
 	assert.ok(!has(plain(error, 120), OFFER_LINE));
 	const closed = apply(error, key("down"));
 	assert.ok(!has(plain(closed, 120), "Playback failed."));
 	assert.ok(has(plain(closed, 120), OFFER_LINE), plain(closed, 120).join("\n"));
 	const f = frame(closed, 120);
-	assert.deepEqual(f.hits.filter((h) => h.id.startsWith("notice:")).map((h) => h.id), ["notice:action", "notice:later"]);
+	assert.deepEqual(
+		f.hits.filter((h) => h.id.startsWith("notice:")).map((h) => h.id),
+		["notice:action", "notice:later"],
+	);
 });
 
 // ---- Review advisories (S29, S31) ----
 
 const browsersN = (n: number) =>
-	Array.from({ length: n }, (_, i) => ({ id: "firefox" as const, label: "Firefox", profileName: `profile-${i + 1}`, profile: `p${i + 1}` }));
+	Array.from({ length: n }, (_, i) => ({
+		id: "firefox" as const,
+		label: "Firefox",
+		profileName: `profile-${i + 1}`,
+		profile: `p${i + 1}`,
+	}));
 
 // S29: connect, Dependencies and dialogs never grow past the height; title and footer stay, the rows between scroll to the cursor.
 test("S29 non-main screens fit the height, keeping the title, footer and cursor row with their hits", () => {

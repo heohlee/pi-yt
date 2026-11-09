@@ -371,3 +371,29 @@ test("helium profiles under a config dir with a comma are skipped", async (t) =>
 	await writeFile(path.join(root, "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "You" } } } }));
 	assert.deepEqual((await detectBrowsers({ home, env: { XDG_CONFIG_HOME: cfg } })).filter((b) => b.id === "helium"), []);
 });
+
+// Advisory S18: Firefox profile names are sanitized and capped like Chromium's; an empty name falls back to the folder.
+test("firefox profile names are sanitized and capped", async (t) => {
+	const home = await fakeHome(t);
+	await writeProfilesIni(
+		home,
+		`[Profile0]\nName=Wo\u001b[31mrk\u0007\nIsRelative=1\nPath=a.work\nDefault=1\n\n[Profile1]\nName=${"x".repeat(60)}\nIsRelative=1\nPath=b.long\n\n[Profile2]\nName=\u0007\nIsRelative=1\nPath=c.blank\n`,
+		["a.work", "b.long", "c.blank"],
+	);
+	assert.deepEqual(
+		(await detectBrowsers({ home, env: {} })).map((b) => b.profileName),
+		["Wo[31mrk", "x".repeat(40), "c.blank"],
+	);
+});
+
+// Advisory S13: detection offers only profiles that a saved config would accept.
+test("firefox profiles with a relative non-plain folder are skipped", async (t) => {
+	const home = await fakeHome(t);
+	await writeProfilesIni(home, "[Profile0]\nName=out\nIsRelative=0\nPath=../outside\n\n[Profile1]\nName=ok\nIsRelative=1\nPath=c.ok\n", [
+		"../outside",
+		"c.ok",
+	]);
+	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
+		{ id: "firefox", label: "Firefox", profileName: "ok", profile: path.join(home, ".mozilla", "firefox", "c.ok") },
+	]);
+});

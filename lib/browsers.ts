@@ -82,6 +82,22 @@ function safeProfile(profile: string): boolean {
 	return !profile.includes(",") && !profile.includes("::");
 }
 
+// yt-dlp trims spaces around ":" and reads a leading ":" as part of "::", so those names would point elsewhere.
+function plainFolder(folder: string): boolean {
+	return safeProfile(folder) && folder !== "." && folder !== ".." && !folder.includes("/") && folder.trim() === folder && folder !== "" && !folder.startsWith(":");
+}
+
+const absoluteFolder = (folder: string) => safeProfile(folder) && path.isAbsolute(folder) && path.normalize(folder) === folder;
+
+/**
+ * Whether `profile` has a shape detection can offer for `browser`: a plain Chromium profile name, an absolute
+ * Helium folder, or a Firefox or Zen folder (absolute, or a bare folder name). Rejects traversal like "../x".
+ */
+export function isProfileFor(browser: BrowserId, profile: string): boolean {
+	if (browser === "firefox" || browser === "zen") return absoluteFolder(profile) || plainFolder(profile);
+	return browser === "helium" ? absoluteFolder(profile) : plainFolder(profile);
+}
+
 async function firefoxProfiles(dir: string): Promise<{ name: string; folder: string }[]> {
 	let text: string;
 	try {
@@ -99,7 +115,7 @@ async function firefoxProfiles(dir: string): Promise<{ name: string; folder: str
 			folder: s.values.IsRelative === "0" ? s.values.Path : path.join(dir, s.values.Path),
 			flagged: s.values.Default === "1",
 		}))
-		.filter((p) => safeProfile(p.folder));
+		.filter((p) => isProfileFor("firefox", p.folder));
 	// Firefox writes prefs.js the first time a profile is opened; never-opened profiles are hidden.
 	const opened = await Promise.all(profiles.map((p) => isFile(path.join(path.resolve(dir, p.folder), "prefs.js"))));
 	profiles = profiles.filter((_, i) => opened[i]);
@@ -108,7 +124,7 @@ async function firefoxProfiles(dir: string): Promise<{ name: string; folder: str
 		profiles.find((p) => installDefault !== undefined && p.path === installDefault) ??
 		profiles.find((p) => p.flagged);
 	const ordered = preferred ? [preferred, ...profiles.filter((p) => p !== preferred)] : profiles;
-	return ordered.map((p) => ({ name: p.name, folder: p.folder }));
+	return ordered.map((p) => ({ name: profileDisplayName(p.name, path.basename(p.folder)), folder: p.folder }));
 }
 
 async function isDir(dir: string): Promise<boolean> {
@@ -165,8 +181,7 @@ async function chromiumProfiles(dir: string): Promise<{ name: string; folder: st
 	const names = await localStateNames(dir);
 	if (!names) return (await isDir(path.join(dir, "Default"))) ? [{ name: "Default", folder: "Default" }] : [];
 	const folders = [...names.keys()]
-		// yt-dlp trims spaces around ":" and reads a leading ":" as part of "::", so those names would point elsewhere.
-		.filter((folder) => safeProfile(folder) && folder !== "." && folder !== ".." && !folder.includes("/") && folder.trim() === folder && folder !== "" && !folder.startsWith(":"))
+		.filter(plainFolder)
 		.sort((a, b) => (a === "Default" ? -1 : b === "Default" ? 1 : naturalOrder(a, b)));
 	const exists = await Promise.all(folders.map((folder) => isDir(path.join(dir, folder))));
 	const found = folders.filter((_, i) => exists[i]).map((folder) => ({ name: names.get(folder)!, folder }));
@@ -209,7 +224,7 @@ export async function detectBrowsers({
 	const helium = path.join(configHome, "net.imput.helium");
 	for (const { name, folder } of await chromiumProfiles(helium)) {
 		const profile = path.join(helium, folder);
-		if (safeProfile(profile)) found.push({ id: "helium", label: LABELS.helium, profileName: name, profile });
+		if (isProfileFor("helium", profile)) found.push({ id: "helium", label: LABELS.helium, profileName: name, profile });
 	}
 	return found;
 }

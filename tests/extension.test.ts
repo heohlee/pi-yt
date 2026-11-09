@@ -17,12 +17,16 @@ test("extension does nothing headless and starts/stops cleanly with UI", async (
 	const dir = await mkdtemp(path.join(os.tmpdir(), "gsyt-"));
 	const previous = process.env.PI_YT_MPV_SOCKET;
 	process.env.PI_YT_MPV_SOCKET = path.join(dir, "missing.sock");
+	const { pi, emit } = fakePi();
+	extension(pi as never);
 	try {
-		const { pi, emit } = fakePi();
-		extension(pi as never);
 		const calls: Array<[string, string | undefined]> = [];
 		const ctx = { hasUI: true, ui: { setStatus: (k: string, t?: string) => calls.push([k, t]) } };
-		emit("session_start", { hasUI: false, ui: { setStatus: () => assert.fail("headless must not touch UI") } });
+		// A started handle would clear the status once the socket fails, so no call proves nothing started.
+		const headless: unknown[] = [];
+		emit("session_start", { hasUI: false, ui: { setStatus: (...args: unknown[]) => headless.push(args) } });
+		await new Promise((r) => setTimeout(r, 50));
+		assert.deepEqual(headless, []);
 		emit("session_start", ctx);
 		emit("session_start", ctx);
 		await new Promise((r) => setTimeout(r, 50));
@@ -30,6 +34,7 @@ test("extension does nothing headless and starts/stops cleanly with UI", async (
 		assert.ok(calls.length >= 1);
 		assert.ok(calls.every(([k, t]) => k === "youtube" && t === undefined));
 	} finally {
+		emit("session_shutdown", {});
 		if (previous === undefined) delete process.env.PI_YT_MPV_SOCKET;
 		else process.env.PI_YT_MPV_SOCKET = previous;
 		await rm(dir, { recursive: true, force: true });

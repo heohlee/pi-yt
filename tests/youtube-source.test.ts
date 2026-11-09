@@ -363,14 +363,36 @@ test("checkDeps scans PATH for executables", async (t) => {
 	await chmod(path.join(a, "mpv"), 0o755);
 	await writeFile(path.join(a, "yt-dlp"), "not executable");
 	await chmod(path.join(a, "yt-dlp"), 0o644);
-	assert.deepEqual(await checkDeps({ env: { PATH: `${a}:${path.join(root, "nope")}` } }), {
+	assert.deepEqual(await checkDeps({ home: root, env: { PATH: `${a}:${path.join(root, "nope")}` } }), {
 		mpv: true,
 		ytDlp: false,
 	});
 	await writeFile(path.join(b, "yt-dlp"), "#!/bin/sh\n");
 	await chmod(path.join(b, "yt-dlp"), 0o755);
-	assert.deepEqual(await checkDeps({ env: { PATH: `${a}:${b}` } }), { mpv: true, ytDlp: true });
-	assert.deepEqual(await checkDeps({ env: {} }), { mpv: false, ytDlp: false });
+	assert.deepEqual(await checkDeps({ home: root, env: { PATH: `${a}:${b}` } }), { mpv: true, ytDlp: true });
+	assert.deepEqual(await checkDeps({ home: root, env: {} }), { mpv: false, ytDlp: false });
+});
+
+// Advisory S14: checkDeps agrees with resolveTools: relative PATH entries are skipped and the managed yt-dlp counts.
+test("checkDeps ignores relative PATH entries and finds the managed yt-dlp", async (t) => {
+	const root = await mkdtemp(path.join(os.tmpdir(), "gsyt-path-"));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	for (const name of ["mpv", "yt-dlp"]) {
+		await writeFile(path.join(root, name), "#!/bin/sh\n");
+		await chmod(path.join(root, name), 0o755);
+	}
+	const cwd = process.cwd();
+	process.chdir(root);
+	try {
+		assert.deepEqual(await checkDeps({ home: root, env: { PATH: "." } }), { mpv: false, ytDlp: false });
+	} finally {
+		process.chdir(cwd);
+	}
+	const managed = path.join(root, "data", "pi-yt", "bin");
+	await mkdir(managed, { recursive: true });
+	await writeFile(path.join(managed, "yt-dlp"), "#!/bin/sh\n");
+	await chmod(path.join(managed, "yt-dlp"), 0o755);
+	assert.deepEqual(await checkDeps({ home: root, env: { XDG_DATA_HOME: path.join(root, "data") } }), { mpv: false, ytDlp: true });
 });
 
 const zen = { browser: "zen" as const, profile: "/h/.zen/a.Default (release)" };
@@ -447,4 +469,12 @@ test("S22 lists skip Mixes, playlists and channels; hasMore counts the raw page"
 	assert.equal(result.ok && result.hasMore, true);
 	const searched = await search("mix", { spawn: fakeSpawn({ stdout }).spawn });
 	assert.deepEqual(searched.ok && searched.tracks.map((t) => t.title), ["Song A", "Song B"]);
+});
+
+// Advisory S16: hasMore follows the raw page, even when some entries are unusable (null or without an id).
+test("hasMore counts unusable entries in a full page", async () => {
+	const entries = [null, { title: "no id" }, ...Array.from({ length: 48 }, (_, i) => ({ id: `v${i}` }))];
+	const result = await listSource("liked", { account: firefox, spawn: fakeSpawn({ stdout: JSON.stringify({ entries }) }).spawn });
+	assert.equal(result.ok && result.tracks.length, 48);
+	assert.equal(result.ok && result.hasMore, true);
 });

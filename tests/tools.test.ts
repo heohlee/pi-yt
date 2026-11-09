@@ -137,6 +137,41 @@ test("S17 copyToClipboard uses the first clipboard tool on PATH, or reports none
 	}
 });
 
+// Advisory S15/S18: a clipboard tool that fails (exit code, spawn throw, error event) hands over to the next one.
+test("copyToClipboard tries the next clipboard tool when one fails", async () => {
+	const s = await scratch();
+	try {
+		const bin = path.join(s.root, "bin");
+		for (const name of ["wl-copy", "xclip", "pbcopy"]) await s.exe(bin, name);
+		const ok = fakeSpawn(0);
+		const failing = fakeSpawn(1);
+		const calls: string[] = [];
+		const spawn = (cmd: string, args: string[]) => {
+			calls.push(path.basename(cmd));
+			if (cmd.endsWith("wl-copy")) return failing.spawn(cmd, args);
+			if (cmd.endsWith("xclip")) throw new Error("spawn failed");
+			return ok.spawn(cmd, args);
+		};
+		assert.equal(await copyToClipboard("hello", { env: { PATH: bin }, spawn }), true);
+		assert.deepEqual(calls, ["wl-copy", "xclip", "pbcopy"]);
+		assert.deepEqual(ok.calls, [{ cmd: path.join(bin, "pbcopy"), args: [], input: "hello" }]);
+
+		const errored: string[] = [];
+		const erroring = (cmd: string) => {
+			errored.push(path.basename(cmd));
+			const child = new EventEmitter() as EventEmitter & { stdin: PassThrough; kill: () => boolean };
+			child.stdin = new PassThrough();
+			child.kill = () => true;
+			setImmediate(() => child.emit("error", new Error("ENOENT")));
+			return child;
+		};
+		assert.equal(await copyToClipboard("x", { env: { PATH: bin }, spawn: erroring }), false);
+		assert.deepEqual(errored, ["wl-copy", "xclip", "pbcopy"]);
+	} finally {
+		await s.cleanup();
+	}
+});
+
 // S17 (verify A2): relative XDG_DATA_HOME is ignored (XDG spec) and relative PATH entries are never searched.
 test("S17 relative XDG_DATA_HOME and relative PATH entries are ignored", async (t) => {
 	const home = await mkdtemp(path.join(os.tmpdir(), "gsyt-rel-"));

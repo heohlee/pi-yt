@@ -130,7 +130,31 @@ const CLIPBOARD_TOOLS: [string, string[]][] = [
 
 const defaultClipboardSpawn: ClipboardSpawn = (command, args) => nodeSpawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
 
-/** Copy `text` with the first of wl-copy, xclip or pbcopy found on PATH; false when none worked. */
+function copyWith(file: string, args: string[], text: string, spawn: ClipboardSpawn): Promise<boolean> {
+	return new Promise((resolve) => {
+		let child: ClipboardChild;
+		const timer = setTimeout(() => {
+			child?.kill();
+			resolve(false);
+		}, CLIPBOARD_TIMEOUT_MS);
+		const finish = (ok: boolean) => {
+			clearTimeout(timer);
+			resolve(ok);
+		};
+		try {
+			child = spawn(file, args);
+		} catch {
+			finish(false);
+			return;
+		}
+		child.on("error", () => finish(false));
+		child.on("close", (code) => finish(code === 0));
+		child.stdin?.on("error", () => finish(false));
+		child.stdin?.end(text);
+	});
+}
+
+/** Copy `text` with wl-copy, xclip or pbcopy from PATH, trying the next one when a tool fails; false when none worked. */
 export async function copyToClipboard(
 	text: string,
 	{ env = process.env, spawn = defaultClipboardSpawn }: { env?: NodeJS.ProcessEnv; spawn?: ClipboardSpawn } = {},
@@ -138,28 +162,7 @@ export async function copyToClipboard(
 	const dirs = pathDirs(env);
 	for (const [name, args] of CLIPBOARD_TOOLS) {
 		const file = await findExecutable(name, dirs);
-		if (!file) continue;
-		return new Promise((resolve) => {
-			let child: ClipboardChild;
-			const timer = setTimeout(() => {
-				child?.kill();
-				resolve(false);
-			}, CLIPBOARD_TIMEOUT_MS);
-			const finish = (ok: boolean) => {
-				clearTimeout(timer);
-				resolve(ok);
-			};
-			try {
-				child = spawn(file, args);
-			} catch {
-				finish(false);
-				return;
-			}
-			child.on("error", () => finish(false));
-			child.on("close", (code) => finish(code === 0));
-			child.stdin?.on("error", () => finish(false));
-			child.stdin?.end(text);
-		});
+		if (file && (await copyWith(file, args, text, spawn))) return true;
 	}
 	return false;
 }

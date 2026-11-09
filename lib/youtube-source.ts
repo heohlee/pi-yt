@@ -1,9 +1,8 @@
-import path from "node:path";
 import { spawn as nodeSpawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { browserLabel, cookieArg } from "./browsers.ts";
 import type { Account } from "./config.ts";
-import { findExecutable, jsRuntimeArgs } from "./tools.ts";
+import { jsRuntimeArgs, resolveTools, type ToolsLocation } from "./tools.ts";
 
 // yt-dlp reads the browser cookies itself via --cookies-from-browser; this
 // module only passes the browser name and profile and never touches cookies.
@@ -224,10 +223,13 @@ function runYtDlp(target: string, extra: string[], opts: SourceOptions): Promise
 	});
 }
 
-function entriesOf(data: unknown): Record<string, unknown>[] {
+function rawEntries(data: unknown): unknown[] {
 	const entries = (data as { entries?: unknown } | null)?.entries;
-	if (!Array.isArray(entries)) return [];
-	return entries.filter(
+	return Array.isArray(entries) ? entries : [];
+}
+
+function entriesOf(data: unknown): Record<string, unknown>[] {
+	return rawEntries(data).filter(
 		(e): e is Record<string, unknown> =>
 			!!e && typeof e === "object" && typeof (e as { id?: unknown }).id === "string" && !!(e as { id: string }).id,
 	);
@@ -268,9 +270,9 @@ async function listPage(target: string, opts: SourceOptions & PageOptions): Prom
 	const page = ["--playlist-start", String(start), "--playlist-end", String(start + pageSize - 1)];
 	const result = await runYtDlp(target, page, opts);
 	if (!result.ok) return result;
-	const entries = entriesOf(result.data);
-	// hasMore counts what yt-dlp returned, so skipping Mixes never hides Load more.
-	return { ok: true, tracks: entries.filter(isVideo).map(toTrack), hasMore: entries.length === pageSize };
+	// hasMore counts every entry yt-dlp returned, so skipping Mixes or unusable entries never hides Load more.
+	const hasMore = rawEntries(result.data).length === pageSize;
+	return { ok: true, tracks: entriesOf(result.data).filter(isVideo).map(toTrack), hasMore };
 }
 
 export function listSource(kind: SourceKind, opts: SourceOptions & PageOptions = {}): Promise<TracksResult> {
@@ -305,11 +307,8 @@ export async function verifySession(account: Account, opts: SourceOptions = {}):
 	return result.ok ? { ok: true } : result;
 }
 
-export async function checkDeps({ env = process.env }: { env?: NodeJS.ProcessEnv } = {}): Promise<{
-	mpv: boolean;
-	ytDlp: boolean;
-}> {
-	const dirs = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
-	const [mpv, ytDlp] = await Promise.all([findExecutable("mpv", dirs), findExecutable("yt-dlp", dirs)]);
+/** Whether mpv and yt-dlp are available, found exactly as resolveTools finds them. */
+export async function checkDeps(location: ToolsLocation): Promise<{ mpv: boolean; ytDlp: boolean }> {
+	const { mpv, ytDlp } = await resolveTools(location);
 	return { mpv: mpv !== null, ytDlp: ytDlp !== null };
 }

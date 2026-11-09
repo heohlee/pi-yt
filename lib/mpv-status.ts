@@ -79,14 +79,21 @@ export function startMpvStatus(deps: MpvStatusDeps): MpvStatusHandle {
 	let props = emptyProps();
 	let socket: net.Socket | undefined;
 	let retryTimer: unknown;
+	let tickTimer: unknown;
 	let stopped = false;
 	let published = false;
 	let lastText: string | undefined;
 	let lastShape: string | undefined;
 	let lastPublishAt = 0;
 
+	const cancelTick = () => {
+		if (tickTimer !== undefined) cancel(tickTimer);
+		tickTimer = undefined;
+	};
+
 	const publish = (text: string | undefined) => {
 		if (published && text === lastText) return;
+		cancelTick();
 		published = true;
 		lastText = text;
 		lastPublishAt = now();
@@ -105,8 +112,16 @@ export function startMpvStatus(deps: MpvStatusDeps): MpvStatusHandle {
 		if (shape !== lastShape) {
 			lastShape = shape;
 			publish(text);
-		} else if (text !== lastText && now() - lastPublishAt >= TICK_MS) {
-			publish(text);
+		} else if (text !== lastText) {
+			const wait = lastPublishAt + TICK_MS - now();
+			if (wait <= 0) publish(text);
+			// No later event may come (paused seek), so a held-back tick is published when the window ends.
+			else if (tickTimer === undefined) {
+				tickTimer = schedule(() => {
+					tickTimer = undefined;
+					update();
+				}, wait);
+			}
 		}
 	};
 
@@ -150,6 +165,7 @@ export function startMpvStatus(deps: MpvStatusDeps): MpvStatusHandle {
 		if (socket !== sock) return;
 		socket = undefined;
 		sock.destroy();
+		cancelTick();
 		props = emptyProps();
 		lastShape = undefined;
 		publish(undefined);
@@ -201,6 +217,7 @@ export function startMpvStatus(deps: MpvStatusDeps): MpvStatusHandle {
 			stopped = true;
 			if (retryTimer !== undefined) cancel(retryTimer);
 			retryTimer = undefined;
+			cancelTick();
 			const sock = socket;
 			socket = undefined;
 			sock?.destroy();

@@ -12,8 +12,14 @@ function fakeClock() {
 	let now = 0;
 	let nextId = 1;
 	const timers: Timer[] = [];
+	const reads: number[] = [];
 	return {
-		now: () => now,
+		/** Every time read so far: a read at a given time proves an event was handled then. */
+		reads,
+		now: () => {
+			reads.push(now);
+			return now;
+		},
 		setTimeout: (fn: () => void, ms: number) => {
 			const timer = { id: nextId++, at: now + ms, fn };
 			timers.push(timer);
@@ -51,12 +57,14 @@ async function fakeMpv() {
 	const clients: net.Socket[] = [];
 	const received: string[] = [];
 	let connections = 0;
+	let closed = 0;
 	const server = net.createServer((socket) => {
 		connections++;
 		clients.push(socket);
 		socket.setEncoding("utf8");
 		socket.on("data", (chunk: string) => received.push(...chunk.split("\n").filter(Boolean)));
 		socket.on("error", () => {});
+		socket.on("close", () => closed++);
 	});
 	await new Promise<void>((r) => server.listen(socketPath, r));
 	const latest = () => clients[clients.length - 1];
@@ -64,6 +72,7 @@ async function fakeMpv() {
 		socketPath,
 		received,
 		connections: () => connections,
+		closed: () => closed,
 		send(name: string, data: unknown) {
 			latest().write(`${JSON.stringify({ event: "property-change", id: 1, name, data })}\n`);
 		},
@@ -167,26 +176,31 @@ test("S7 elapsed ticks publish at most once every 5 seconds", async () => {
 	try {
 		await playing();
 		const before = calls.length;
-		clock.advance(1000);
-		mpv.send("time-pos", 81.1);
-		clock.advance(1000);
-		mpv.send("time-pos", 82.1);
-		clock.advance(2900);
-		mpv.send("time-pos", 85.0);
-		// Flush: a structural change proves earlier lines were processed.
-		mpv.send("metadata", { uploader: "Nujabes", album: "Modal Soul" });
-		mpv.send("pause", false);
-		await new Promise((r) => setTimeout(r, 50));
+		// Each tick is handled at its own time before the clock moves on.
+		let time = 0;
+		const tick = async (at: number, seconds: number) => {
+			clock.advance(at - time);
+			time = at;
+			const mark = clock.reads.length;
+			mpv.send("time-pos", seconds);
+			await waitFor(() => clock.reads.slice(mark).includes(at), `tick at ${at}`);
+		};
+		await tick(1000, 81.1);
+		await tick(2000, 82.1);
+		await tick(4900, 85.0);
 		assert.equal(calls.length, before, "ticks within 5s must not publish");
+		// The latest held-back tick is published once the window ends.
 		clock.advance(100);
-		mpv.send("time-pos", 85.2);
-		await waitFor(() => calls.length === before + 1, "tick after 5s");
-		assert.equal(calls[calls.length - 1], "♪ Aruarian Dance · Nujabes · 1:25/4:12");
+		time = 5000;
+		assert.deepEqual(calls.slice(before), ["♪ Aruarian Dance · Nujabes · 1:25/4:12"]);
 		// Same text again (sub-second tick) is never re-published, even after 5s.
 		clock.advance(6000);
+		time = 11000;
 		mpv.send("time-pos", 85.7);
-		await new Promise((r) => setTimeout(r, 50));
-		assert.equal(calls.length, before + 1);
+		// Handled in order: once 86.3 is seen, 85.7 was handled without publishing.
+		await tick(11000, 86.3);
+		await waitFor(() => calls.length === before + 2, "next second");
+		assert.deepEqual(calls.slice(before), ["♪ Aruarian Dance · Nujabes · 1:25/4:12", "♪ Aruarian Dance · Nujabes · 1:26/4:12"]);
 	} finally {
 		await teardown();
 	}
@@ -219,8 +233,10 @@ test("S3 socket close clears status and reconnects after 5s", async () => {
 		clock.advance(1);
 		await waitFor(() => mpv.connections() === 2, "reconnect");
 		await waitFor(() => mpv.received.length >= 12, "re-observe");
+		// The new connection must publish the line again on its own.
 		await playing();
-		assert.equal(calls.slice(clears - 1).filter((c) => c === undefined).length, 1);
+		await waitFor(() => calls.slice(clears).includes("♪ Aruarian Dance · Nujabes · 1:20/4:12"), "line after reconnect");
+		assert.deepEqual(calls.slice(clears - 1), [undefined, "♪ Aruarian Dance · Nujabes · 1:20/4:12"]);
 	} finally {
 		await teardown();
 	}
@@ -253,9 +269,11 @@ test("S3 connect failure clears once and retries every 5s", async () => {
 test("setStatus throwing never escapes", async () => {
 	const mpv = await fakeMpv();
 	const clock = fakeClock();
+	const attempts: Array<string | undefined> = [];
 	const handle = startMpvStatus({
 		socketPath: mpv.socketPath,
-		setStatus: () => {
+		setStatus: (text) => {
+			attempts.push(text);
 			throw new Error("ui gone");
 		},
 		now: clock.now,
@@ -266,7 +284,11 @@ test("setStatus throwing never escapes", async () => {
 		await waitFor(() => mpv.received.length >= 6, "observe");
 		mpv.send("media-title", "Aruarian Dance");
 		mpv.send("idle-active", false);
-		await new Promise((r) => setTimeout(r, 30));
+		await waitFor(() => attempts.includes("♪ Aruarian Dance · 0:00"), "first line");
+		// A throw does not break the event stream: later changes still publish.
+		mpv.send("pause", true);
+		await waitFor(() => attempts.includes("⏸ Aruarian Dance · 0:00"), "paused line");
+		assert.deepEqual(attempts, [undefined, "♪ Aruarian Dance · 0:00", "⏸ Aruarian Dance · 0:00"]);
 	} finally {
 		handle.stop();
 		await mpv.close();
@@ -274,13 +296,22 @@ test("setStatus throwing never escapes", async () => {
 });
 
 test("stop cancels timers and closes the socket", async () => {
-	const { mpv, clock, handle, playing, teardown } = await setup();
+	const { mpv, clock, calls, handle, playing, teardown } = await setup();
 	try {
 		await playing();
+		clock.advance(1000);
+		const mark = clock.reads.length;
+		mpv.send("time-pos", 81.3);
+		await waitFor(() => clock.reads.slice(mark).includes(1000), "pending tick");
+		const published = calls.length;
 		handle.stop();
-		await new Promise((r) => setTimeout(r, 30));
+		await waitFor(() => mpv.closed() === 1, "socket closed");
+		assert.deepEqual(calls.slice(published), [undefined]);
 		assert.deepEqual(clock.pending(), []);
+		clock.advance(10_000);
+		await new Promise((r) => setTimeout(r, 30));
 		assert.equal(mpv.connections(), 1);
+		assert.deepEqual(calls.slice(published), [undefined]);
 	} finally {
 		await teardown();
 	}
@@ -290,4 +321,25 @@ test("stop cancels timers and closes the socket", async () => {
 test("S24 resolveSocketPath prefers PI_YT_MPV_SOCKET", () => {
 	assert.equal(resolveSocketPath({ PI_YT_MPV_SOCKET: "/new.sock", XDG_RUNTIME_DIR: "/run/u" }), "/new.sock");
 	assert.equal(resolveSocketPath({ XDG_RUNTIME_DIR: "/run/u" }), "/run/u/pi-yt/mpv.sock");
+});
+
+// Advisory S21: an elapsed change held back by the 5s throttle is published once the window ends, even with no further event.
+test("S7 a throttled elapsed change is published when the 5s window ends", async () => {
+	const { mpv, clock, calls, playing, teardown } = await setup();
+	try {
+		await playing();
+		mpv.send("pause", true);
+		await waitFor(() => calls[calls.length - 1] === "⏸ Aruarian Dance · Nujabes · 1:20/4:12", "paused line");
+		clock.advance(1000);
+		const mark = clock.reads.length;
+		mpv.send("time-pos", 120);
+		await waitFor(() => clock.reads.slice(mark).includes(1000), "seek handled");
+		const before = calls.length;
+		clock.advance(3999);
+		assert.equal(calls.length, before);
+		clock.advance(1);
+		assert.deepEqual(calls.slice(before), ["⏸ Aruarian Dance · Nujabes · 2:00/4:12"]);
+	} finally {
+		await teardown();
+	}
 });

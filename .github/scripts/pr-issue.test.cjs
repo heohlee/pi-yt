@@ -52,6 +52,26 @@ test('propagates non-404 API failures', async () => {
   await assert.rejects(validateIssue({ body: 'Closes #1', github: api({ 1: failure }), context }), failure);
 });
 
+test('ignores references inside fenced code blocks', async () => {
+  for (const body of ['```\nCloses #1\n```', '~~~\nCloses #1\n~~~', '  ````md\nCloses #1\n```\n````',
+    '```\nCloses #1', 'Text\n~~~~\nCloses #1\n~~~\n']) {
+    const github = api({ 1: { number: 1 } });
+    await assert.rejects(validateIssue({ body, github, context }), /standalone.*Closes/);
+    assert.deepEqual(github.calls, []);
+  }
+  const github = api({ 2: { number: 2 } });
+  assert.equal(await validateIssue({ body: '```\nCloses #1\n```\nCloses #2', github, context }), 2);
+  assert.deepEqual(github.calls.map(call => call.issue_number), [2]);
+});
+
+test('skips deleted issues answering 410 like missing ones', async () => {
+  const gone = () => Object.assign(new Error('Gone'), { status: 410 });
+  const github = api({ 1: gone(), 2: { number: 2 } });
+  assert.equal(await validateIssue({ body: 'Closes #1\nCloses #2', github, context }), 2);
+  assert.deepEqual(github.calls.map(call => call.issue_number), [1, 2]);
+  await assert.rejects(validateIssue({ body: 'Closes #1', github: api({ 1: gone() }), context }), /existing issue/);
+});
+
 test('edits are validated against the current body', async () => {
   const github = api({ 1: { number: 1 } });
   assert.equal(await validateIssue({ body: 'Closes #1', github, context }), 1);
@@ -101,4 +121,10 @@ test('workflow runs only trusted base code with read-only permissions', () => {
   assert.match(workflow, /pull-requests: read/);
   assert.doesNotMatch(workflow, /: write|pull_request\.head|\$\{\{[^}]*\.body/);
   assert.match(workflow, /node --test .github\/scripts\/pr-issue.test.cjs/);
+  assert.match(workflow, /^    name: PR issue$/m);
+  const uses = workflow.match(/^\s*(?:- )?uses: .*$/gm);
+  assert.equal(uses.length, 3);
+  for (const line of uses) {
+    assert.match(line, /^\s*(?:- )?uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/);
+  }
 });

@@ -1,28 +1,33 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
+import type { PlayerState } from "../lib/player.ts";
 import {
 	ACCOUNT_CHOICES,
+	type Action,
 	connectOptions,
 	dependencyOptions,
-	initPopover,
+	type Effect,
 	hasLoadMore,
+	initPopover,
+	type Key,
 	keyFromInput,
 	leftRows,
 	loadMoreIndex,
+	type PopoverInit,
+	type PopoverState,
 	reduce,
 	selectedTrack,
 	snapshotPopover,
-	type Action,
-	type Effect,
-	type Key,
-	type PopoverInit,
-	type PopoverState,
 	type Target,
 } from "../lib/popover-model.ts";
-import type { PlayerState } from "../lib/player.ts";
 import type { Track } from "../lib/youtube-source.ts";
 
-const FIREFOX = { id: "firefox" as const, label: "Firefox", profileName: "default-release", profile: "default-release" };
+const FIREFOX = {
+	id: "firefox" as const,
+	label: "Firefox",
+	profileName: "default-release",
+	profile: "default-release",
+};
 const CHROMIUM = { id: "chromium" as const, label: "Chromium", profileName: "Default", profile: "Default" };
 const ACCOUNT = { browser: "firefox" as const, profile: "default-release" };
 
@@ -52,7 +57,14 @@ const playerState = (over: Partial<PlayerState> = {}): PlayerState => ({
 });
 
 function init(over: Partial<PopoverInit> = {}) {
-	return initPopover({ account: null, anonymous: false, browsers: [FIREFOX, CHROMIUM], deps: null, player: null, ...over });
+	return initPopover({
+		account: null,
+		anonymous: false,
+		browsers: [FIREFOX, CHROMIUM],
+		deps: null,
+		player: null,
+		...over,
+	});
 }
 
 /** Apply actions in order, collecting every effect. */
@@ -75,7 +87,11 @@ const loadId = (effects: Effect[]) => {
 /** Main screen with an account, Recommended loaded with TRACKS, focus on the right pane. */
 function loadedMain() {
 	const start = init({ account: ACCOUNT, player: playerState() });
-	return run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: true, tracks: TRACKS } }, ...keys("tab"));
+	return run(
+		start.state,
+		{ type: "loaded", id: loadId(start.effects), result: { ok: true, tracks: TRACKS } },
+		...keys("tab"),
+	);
 }
 
 // S3: connect screen when there is no account and anonymous was not chosen.
@@ -186,7 +202,11 @@ test("loaded results show tracks; results for a previous source are ignored", ()
 	assert.equal(stale.state.list.status, "loading");
 	assert.deepEqual(stale.state.list.tracks, []);
 
-	const fresh = run(switched.state, { type: "loaded", id: loadId(switched.effects), result: { ok: true, tracks: TRACKS } });
+	const fresh = run(switched.state, {
+		type: "loaded",
+		id: loadId(switched.effects),
+		result: { ok: true, tracks: TRACKS },
+	});
 	assert.equal(fresh.state.list.status, "ready");
 	assert.deepEqual(fresh.state.list.tracks, TRACKS);
 	const later = leftRows(fresh.state).find((r) => r.type === "source" && r.key === "history");
@@ -196,7 +216,12 @@ test("loaded results show tracks; results for a previous source are ignored", ()
 // S8: a source error is kept as message + hint for the view.
 test("a failed load keeps the error for the right pane", () => {
 	const start = init({ account: ACCOUNT });
-	const error = { kind: "extract" as const, message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp.", detail: "x" };
+	const error = {
+		kind: "extract" as const,
+		message: "yt-dlp could not read YouTube.",
+		hint: "Update yt-dlp.",
+		detail: "x",
+	};
 	const { state } = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: false, error } });
 	assert.equal(state.list.status, "error");
 	assert.deepEqual(state.list.error, error);
@@ -213,9 +238,7 @@ test("enter on a track, Play all and Shuffle emit exact player effects", () => {
 	]);
 	// S21: moving onto the tracks also emits dwell effects; only the player effects are checked here.
 	const played = (...ks: Key[]) => run(state, ...keys(...ks)).effects.filter((e) => e.type !== "dwell");
-	assert.deepEqual(played("down", "down", "down", "down", "enter"), [
-		{ type: "play", tracks: TRACKS, index: 2 },
-	]);
+	assert.deepEqual(played("down", "down", "down", "down", "enter"), [{ type: "play", tracks: TRACKS, index: 2 }]);
 	// Bottom of the list clamps.
 	assert.deepEqual(played("down", "down", "down", "down", "down", "down", "enter"), [
 		{ type: "play", tracks: TRACKS, index: 2 },
@@ -255,13 +278,24 @@ test("esc closes, but first clears a search query", () => {
 // S6: typing in the search pane edits the query; enter searches.
 test("search: typing, backspace and enter emit a search load", () => {
 	const { state } = loadedMain();
-	const typed = run(state, ...keys({ text: "/" }, { text: "nu" }, { text: "j" }, { text: " " }, { text: "x" }, "backspace"));
+	const typed = run(
+		state,
+		...keys({ text: "/" }, { text: "nu" }, { text: "j" }, { text: " " }, { text: "x" }, "backspace"),
+	);
 	assert.equal(typed.state.source?.kind, "search");
 	assert.equal(typed.state.query, "nuj ");
 	const searched = run(typed.state, ...keys("enter"));
-	assert.deepEqual(searched.effects.at(-1), { type: "load", id: loadId(searched.effects), request: { kind: "search", query: "nuj" } });
+	assert.deepEqual(searched.effects.at(-1), {
+		type: "load",
+		id: loadId(searched.effects),
+		request: { kind: "search", query: "nuj" },
+	});
 
-	const results = run(searched.state, { type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } });
+	const results = run(searched.state, {
+		type: "loaded",
+		id: loadId(searched.effects),
+		result: { ok: true, tracks: TRACKS },
+	});
 	const onResult = run(results.state, ...keys("down"));
 	assert.deepEqual(run(onResult.state, ...keys({ text: "a" })).effects, [{ type: "enqueue", track: TRACKS[0] }]);
 	assert.deepEqual(run(onResult.state, ...keys("enter")).effects, [{ type: "play", tracks: TRACKS, index: 0 }]);
@@ -388,7 +422,10 @@ test("account choice: Use another browser opens connect pick with the account st
 	assert.equal(state.screen, "connect");
 	assert.equal(state.connect.phase, "pick");
 	assert.deepEqual(state.account, ACCOUNT);
-	assert.deepEqual(effects.filter((e) => e.type === "clearAccount" || e.type === "saveAccount"), []);
+	assert.deepEqual(
+		effects.filter((e) => e.type === "clearAccount" || e.type === "saveAccount"),
+		[],
+	);
 });
 
 // S10: esc from connect with an account still saved returns to main.
@@ -428,7 +465,11 @@ const rowCount = (state: PopoverState, key: string) => {
 /** Recommended loaded with a full first page (hasMore), focus on the right pane, cursor on Load more. */
 function onLoadMore() {
 	const start = init({ account: ACCOUNT });
-	const loaded = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: true, tracks: TRACKS, hasMore: true } });
+	const loaded = run(start.state, {
+		type: "loaded",
+		id: loadId(start.effects),
+		result: { ok: true, tracks: TRACKS, hasMore: true },
+	});
 	// Play all, Shuffle, 3 tracks, then Load more.
 	return run(loaded.state, ...keys("tab", "down", "down", "down", "down", "down"));
 }
@@ -440,7 +481,9 @@ test("S14 Load more emits a load for the next page starting after the loaded tra
 	assert.equal(state.rightIndex, 5);
 	assert.equal(run(state, ...keys("down")).state.rightIndex, 5, "Load more is the last row");
 	const more = run(state, ...keys("enter"));
-	assert.deepEqual(more.effects, [{ type: "load", id: loadId(more.effects), request: { kind: "recommended", start: 4 } }]);
+	assert.deepEqual(more.effects, [
+		{ type: "load", id: loadId(more.effects), request: { kind: "recommended", start: 4 } },
+	]);
 	assert.equal(more.state.list.more, loadId(more.effects), "Loading more… while the page is pending");
 	assert.equal(more.state.list.status, "ready");
 	assert.deepEqual(more.state.list.tracks, TRACKS);
@@ -459,7 +502,11 @@ test("S14 Load more emits a load for the next page starting after the loaded tra
 test("S14 the next page appends tracks and updates hasMore and the count", () => {
 	const more = run(onLoadMore().state, ...keys("enter"));
 	const page = [track(4), track(5)];
-	const { state } = run(more.state, { type: "loaded", id: loadId(more.effects), result: { ok: true, tracks: page, hasMore: false } });
+	const { state } = run(more.state, {
+		type: "loaded",
+		id: loadId(more.effects),
+		result: { ok: true, tracks: page, hasMore: false },
+	});
 	assert.deepEqual(state.list.tracks, [...TRACKS, ...page]);
 	assert.equal(state.list.hasMore, false);
 	assert.equal(state.list.more, null);
@@ -486,7 +533,11 @@ test("S14 a stale page is ignored after switching source or reloading", () => {
 // S14/S8: a failed page keeps the loaded tracks and shows the error as the notice.
 test("S14 a failed page keeps the tracks and shows the notice", () => {
 	const more = run(onLoadMore().state, ...keys("enter"));
-	const error = { kind: "network" as const, message: "Could not reach YouTube.", hint: "Check your connection and retry." };
+	const error = {
+		kind: "network" as const,
+		message: "Could not reach YouTube.",
+		hint: "Check your connection and retry.",
+	};
 	const { state } = run(more.state, { type: "loaded", id: loadId(more.effects), result: { ok: false, error } });
 	assert.deepEqual(state.list.tracks, TRACKS);
 	assert.equal(state.list.status, "ready");
@@ -499,7 +550,9 @@ test("S14 a failed page keeps the tracks and shows the notice", () => {
 test("S14 r reloads the current source from page 1; queue, search and source rows ignore it", () => {
 	const { state } = loadedMain();
 	const reloaded = run(state, ...keys("down", { text: "r" }));
-	assert.deepEqual(reloaded.effects, [{ type: "load", id: loadId(reloaded.effects), request: { kind: "recommended", refresh: true } }]);
+	assert.deepEqual(reloaded.effects, [
+		{ type: "load", id: loadId(reloaded.effects), request: { kind: "recommended", refresh: true } },
+	]);
 	assert.equal(reloaded.state.list.status, "loading");
 	assert.equal(reloaded.state.rightIndex, 0);
 
@@ -541,7 +594,10 @@ test("S19 connect options never include tool actions", () => {
 	const types = (deps: PopoverInit["deps"]) => connectOptions(init({ deps, setup: SETUP }).state).map((o) => o.type);
 	assert.deepEqual(types({ mpv: true, ytDlp: "system" }), ["browser", "browser", "anonymous"]);
 	assert.deepEqual(types(null), ["browser", "browser", "anonymous"]);
-	assert.deepEqual(connectOptions({ ...init().state, deps: MISSING_BOTH }).map((o) => o.type), ["browser", "browser", "anonymous"]);
+	assert.deepEqual(
+		connectOptions({ ...init().state, deps: MISSING_BOTH }).map((o) => o.type),
+		["browser", "browser", "anonymous"],
+	);
 });
 
 // S17: Install yt-dlp asks first; Install starts the download, Cancel and esc go back.
@@ -553,7 +609,14 @@ test("S17 Install yt-dlp opens the confirmation; Install emits install, Cancel/e
 	const started = run(confirm.state, ...keys("enter"));
 	const id = idOf(started.effects, "install");
 	assert.deepEqual(started.effects, [{ type: "install", id }]);
-	assert.deepEqual(started.state.dialog, { type: "download", id, received: 0, total: 41166968, verifying: false, retry: null });
+	assert.deepEqual(started.state.dialog, {
+		type: "download",
+		id,
+		received: 0,
+		total: 41166968,
+		verifying: false,
+		retry: null,
+	});
 
 	for (const back of [keys("down", "enter"), keys("esc")]) {
 		const out = run(confirm.state, ...back);
@@ -572,14 +635,25 @@ test("S17 download progress, verifying and esc cancel", () => {
 		{ type: "installProgress", id, progress: { phase: "download", received: 1000, total: 2000 } },
 		{ type: "installProgress", id: id + 50, progress: { phase: "download", received: 5, total: 5 } },
 	);
-	assert.deepEqual(progressed.state.dialog, { type: "download", id, received: 1000, total: 2000, verifying: false, retry: null });
+	assert.deepEqual(progressed.state.dialog, {
+		type: "download",
+		id,
+		received: 1000,
+		total: 2000,
+		verifying: false,
+		retry: null,
+	});
 	const verifying = run(progressed.state, { type: "installProgress", id, progress: { phase: "verify" } });
 	assert.equal(verifying.state.dialog?.type === "download" && verifying.state.dialog.verifying, true);
 
 	const cancelled = run(progressed.state, ...keys("esc"));
 	assert.deepEqual(cancelled.effects, [{ type: "cancel", id }]);
 	assert.equal(cancelled.state.dialog, null);
-	assert.deepEqual(run(cancelled.state, { type: "installed", id, result: { ok: true } }).effects, [], "late result ignored");
+	assert.deepEqual(
+		run(cancelled.state, { type: "installed", id, result: { ok: true } }).effects,
+		[],
+		"late result ignored",
+	);
 });
 
 // S17/S19: success closes the dialog, says so and re-resolves the tools; the rows refresh from deps.
@@ -601,9 +675,18 @@ test("S17 a finished install shows ✓ yt-dlp installed and re-checks the tools"
 test("S17 a failed install offers Retry and Back", () => {
 	const started = gateMissing("enter", "enter");
 	const id = idOf(started.effects, "install");
-	const error = { kind: "hash", message: "The download did not match the official checksum.", hint: "Nothing was installed. Retry later." };
+	const error = {
+		kind: "hash",
+		message: "The download did not match the official checksum.",
+		hint: "Nothing was installed. Retry later.",
+	};
 	const failed = run(started.state, { type: "installed", id, result: { ok: false, error } });
-	assert.deepEqual(failed.state.dialog, { type: "failed", error: { message: error.message, hint: error.hint }, cursor: 0, retry: null });
+	assert.deepEqual(failed.state.dialog, {
+		type: "failed",
+		error: { message: error.message, hint: error.hint },
+		cursor: 0,
+		retry: null,
+	});
 	assert.deepEqual(failed.effects, []);
 
 	const retried = run(failed.state, ...keys("enter"));
@@ -633,7 +716,11 @@ test("S17 How to install mpv offers Copy command and Check again", () => {
 
 	const copy = run(help.state, ...keys("enter"));
 	assert.deepEqual(copy.effects, [{ type: "copy", text: "sudo pacman -S mpv" }]);
-	assert.deepEqual(run(copy.state, { type: "copied", ok: true }).state.notice, { message: "Copied.", hint: "", tone: "success" });
+	assert.deepEqual(run(copy.state, { type: "copied", ok: true }).state.notice, {
+		message: "Copied.",
+		hint: "",
+		tone: "success",
+	});
 	assert.deepEqual(run(copy.state, { type: "copied", ok: false }).state.notice, {
 		message: "No clipboard tool found; copy it by hand.",
 		hint: "",
@@ -651,7 +738,13 @@ test("S17 How to install mpv offers Copy command and Check again", () => {
 
 	// No known command: only Check again.
 	const unknown = run(
-		init({ deps: MISSING_BOTH, setup: { ...SETUP, mpv: { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" } } }).state,
+		init({
+			deps: MISSING_BOTH,
+			setup: {
+				...SETUP,
+				mpv: { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" },
+			},
+		}).state,
 		...keys("down", "enter", "enter"),
 	);
 	assert.deepEqual(unknown.effects, [{ type: "checkTools" }]);
@@ -671,26 +764,45 @@ test("S17 Update yt-dlp updates the managed copy once and reports the result", (
 	assert.deepEqual(managed.effects, [{ type: "update", id }, { type: "dismissUpdate" }]);
 	assert.deepEqual(managed.state.updating, { id, retry: null });
 	const again = run(managed.state, { type: "updateAvailable", latest: "2026.11.05" }, ...keys({ text: "u" }));
-	assert.deepEqual(again.effects.filter((e) => e.type === "update"), [], "no second update while one runs");
+	assert.deepEqual(
+		again.effects.filter((e) => e.type === "update"),
+		[],
+		"no second update while one runs",
+	);
 	const done = run(managed.state, { type: "updated", id, result: { ok: true } });
 	assert.equal(done.state.updating, null);
 	assert.deepEqual(done.state.notice, { message: "yt-dlp is up to date.", hint: "", tone: "success" });
 	const failed = run(managed.state, {
 		type: "updated",
 		id,
-		result: { ok: false, error: { kind: "update", message: "Could not update yt-dlp.", hint: "Check your connection and retry." } },
+		result: {
+			ok: false,
+			error: { kind: "update", message: "Could not update yt-dlp.", hint: "Check your connection and retry." },
+		},
 	});
-	assert.deepEqual(failed.state.notice, { message: "Could not update yt-dlp.", hint: "Check your connection and retry." });
+	assert.deepEqual(failed.state.notice, {
+		message: "Could not update yt-dlp.",
+		hint: "Check your connection and retry.",
+	});
 });
 
-const EXTRACT = { kind: "extract" as const, message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry." };
+const EXTRACT = {
+	kind: "extract" as const,
+	message: "yt-dlp could not read YouTube.",
+	hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry.",
+};
 
 // S17/S8: an extraction failure offers Update yt-dlp; Enter updates, then retries the failed load once.
 test("S17 an extract error offers Update yt-dlp; Enter updates and retries the load", () => {
 	const start = init({ account: ACCOUNT, deps: { mpv: true, ytDlp: "managed" }, setup: SETUP });
 	const failed = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: false, error: EXTRACT } });
 	assert.equal(failed.state.list.status, "error");
-	assert.deepEqual(failed.state.notice, { message: EXTRACT.message, hint: EXTRACT.hint, action: "update", retry: "list" });
+	assert.deepEqual(failed.state.notice, {
+		message: EXTRACT.message,
+		hint: EXTRACT.hint,
+		action: "update",
+		retry: "list",
+	});
 
 	const updating = run(failed.state, ...keys("enter"));
 	const id = idOf(updating.effects, "update");
@@ -703,17 +815,37 @@ test("S17 an extract error offers Update yt-dlp; Enter updates and retries the l
 	// Any other key just dismisses the offer.
 	assert.deepEqual(run(failed.state, ...keys("down")).effects, []);
 	// Search failures retry the same query.
-	const anon = run(init({ anonymous: true, deps: { mpv: true, ytDlp: "managed" } }).state, ...keys({ text: "x" }, "enter"));
-	const searchFailed = run(anon.state, { type: "loaded", id: loadId(anon.effects), result: { ok: false, error: EXTRACT } }, ...keys("enter"));
-	const again = run(searchFailed.state, { type: "updated", id: idOf(searchFailed.effects, "update"), result: { ok: true } });
-	assert.deepEqual(again.effects, [{ type: "load", id: loadId(again.effects), request: { kind: "search", query: "x" } }]);
+	const anon = run(
+		init({ anonymous: true, deps: { mpv: true, ytDlp: "managed" } }).state,
+		...keys({ text: "x" }, "enter"),
+	);
+	const searchFailed = run(
+		anon.state,
+		{ type: "loaded", id: loadId(anon.effects), result: { ok: false, error: EXTRACT } },
+		...keys("enter"),
+	);
+	const again = run(searchFailed.state, {
+		type: "updated",
+		id: idOf(searchFailed.effects, "update"),
+		result: { ok: true },
+	});
+	assert.deepEqual(again.effects, [
+		{ type: "load", id: loadId(again.effects), request: { kind: "search", query: "x" } },
+	]);
 });
 
 // S17/S8: playing without mpv offers How to install mpv.
 test("S17 a missing mpv on play offers How to install mpv", () => {
 	const { state } = loadedMain();
-	const errored = run(state, { type: "playerError", error: { kind: "missing", message: "mpv not found", hint: "Install it: sudo pacman -S mpv" } });
-	assert.deepEqual(errored.state.notice, { message: "mpv not found", hint: "Install it: sudo pacman -S mpv", action: "mpv" });
+	const errored = run(state, {
+		type: "playerError",
+		error: { kind: "missing", message: "mpv not found", hint: "Install it: sudo pacman -S mpv" },
+	});
+	assert.deepEqual(errored.state.notice, {
+		message: "mpv not found",
+		hint: "Install it: sudo pacman -S mpv",
+		action: "mpv",
+	});
 	const help = run(errored.state, ...keys("enter"));
 	assert.deepEqual(help.effects, []);
 	assert.equal(help.state.dialog?.type, "mpv");
@@ -725,11 +857,19 @@ test("S17 a missing yt-dlp on load offers Install yt-dlp and retries after insta
 	const start = init({ account: ACCOUNT, deps: { mpv: true, ytDlp: "system" }, setup: SETUP });
 	const missing = { kind: "missing" as const, message: "yt-dlp not found", hint: "Install it." };
 	const failed = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: false, error: missing } });
-	assert.deepEqual(failed.state.notice, { message: "yt-dlp not found", hint: "Install it.", action: "install", retry: "list" });
+	assert.deepEqual(failed.state.notice, {
+		message: "yt-dlp not found",
+		hint: "Install it.",
+		action: "install",
+		retry: "list",
+	});
 	const started = run(failed.state, ...keys("enter", "enter"));
 	const id = idOf(started.effects, "install");
 	const done = run(started.state, { type: "installed", id, result: { ok: true } });
-	assert.deepEqual(done.effects, [{ type: "checkTools" }, { type: "load", id: loadId(done.effects), request: { kind: "recommended" } }]);
+	assert.deepEqual(done.effects, [
+		{ type: "checkTools" },
+		{ type: "load", id: loadId(done.effects), request: { kind: "recommended" } },
+	]);
 });
 
 // ---- S18 remember place and YouTube order ----
@@ -752,7 +892,11 @@ test("S18 init with an account and no snapshot selects Recommended and loads it"
 test("S18 a snapshot restores source, pane, cursor and scroll, clamping the cursor to the list", () => {
 	const start = init({ account: ACCOUNT });
 	const opened = run(start.state, ...keys("down", "enter"));
-	const loaded = run(opened.state, { type: "loaded", id: loadId(opened.effects), result: { ok: true, tracks: many(10), hasMore: true } });
+	const loaded = run(opened.state, {
+		type: "loaded",
+		id: loadId(opened.effects),
+		result: { ok: true, tracks: many(10), hasMore: true },
+	});
 	const moved = run(loaded.state, ...keys("down", "down", "down", "down", "down", "down")).state;
 	assert.equal(moved.rightIndex, 6);
 	const snapshot = snapshotPopover(moved, { left: 1, right: 3 });
@@ -764,11 +908,19 @@ test("S18 a snapshot restores source, pane, cursor and scroll, clamping the curs
 	assert.equal(again.state.focus, "right");
 	assert.deepEqual(again.scroll, { left: 1, right: 3 });
 	assert.deepEqual(again.effects, [{ type: "load", id: loadId(again.effects), request: { kind: "history" } }]);
-	const back = run(again.state, { type: "loaded", id: loadId(again.effects), result: { ok: true, tracks: many(10), hasMore: true } });
+	const back = run(again.state, {
+		type: "loaded",
+		id: loadId(again.effects),
+		result: { ok: true, tracks: many(10), hasMore: true },
+	});
 	assert.equal(back.state.rightIndex, 6);
 	assert.equal(selectedTrack(back.state), 4, "row 5");
 
-	const shorter = run(again.state, { type: "loaded", id: loadId(again.effects), result: { ok: true, tracks: many(2) } });
+	const shorter = run(again.state, {
+		type: "loaded",
+		id: loadId(again.effects),
+		result: { ok: true, tracks: many(2) },
+	});
 	assert.equal(shorter.state.rightIndex, 3, "clamped to the last track");
 	assert.equal(run(shorter.state, ...keys("down")).state.rightIndex, 3);
 });
@@ -777,7 +929,11 @@ test("S18 a snapshot restores source, pane, cursor and scroll, clamping the curs
 test("S18 a search snapshot restores the query and results without searching again", () => {
 	const anon = init({ anonymous: true });
 	const searched = run(anon.state, ...keys({ text: "nujabes" }, "enter"));
-	const results = run(searched.state, { type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } }, ...keys("down", "down"));
+	const results = run(
+		searched.state,
+		{ type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } },
+		...keys("down", "down"),
+	);
 	const snapshot = snapshotPopover(results.state, SCROLL);
 
 	const again = init({ anonymous: true, snapshot });
@@ -796,7 +952,11 @@ test("S18 a snapshot restores expanded Playlists and the selected playlist", () 
 	const start = init({ account: ACCOUNT });
 	const expanded = run(start.state, ...keys("down", "down", "down", "down", "enter"));
 	const playlists = [{ id: "PL1", title: "Road trip", count: 2 }];
-	const ready = run(expanded.state, { type: "playlistsLoaded", id: idOf(expanded.effects, "loadPlaylists"), result: { ok: true, playlists } });
+	const ready = run(expanded.state, {
+		type: "playlistsLoaded",
+		id: idOf(expanded.effects, "loadPlaylists"),
+		result: { ok: true, playlists },
+	});
 	const picked = run(ready.state, ...keys("down", "enter", "left"));
 	const snapshot = snapshotPopover(picked.state, SCROLL);
 
@@ -851,7 +1011,11 @@ const READY = { message: "✓ Ready", hint: "", tone: "success" };
 function historySnapshot() {
 	const start = init({ account: ACCOUNT });
 	const opened = run(start.state, ...keys("down", "enter"));
-	const loaded = run(opened.state, { type: "loaded", id: loadId(opened.effects), result: { ok: true, tracks: many(10) } });
+	const loaded = run(opened.state, {
+		type: "loaded",
+		id: loadId(opened.effects),
+		result: { ok: true, tracks: many(10) },
+	});
 	return snapshotPopover(run(loaded.state, ...keys("down", "down", "down")).state, { left: 1, right: 2 })!;
 }
 
@@ -889,8 +1053,15 @@ test("S19 init with both tools opens connect or main as before", () => {
 
 // S19: installing yt-dlp with mpv already there leaves for main (account) with ✓ Ready.
 test("S19 after installing yt-dlp, both tools found leaves for main on Recommended with ✓ Ready", () => {
-	const started = run(init({ account: ACCOUNT, deps: { mpv: true, ytDlp: null }, setup: SETUP }).state, ...keys("enter", "enter"));
-	const installed = run(started.state, { type: "installed", id: idOf(started.effects, "install"), result: { ok: true } });
+	const started = run(
+		init({ account: ACCOUNT, deps: { mpv: true, ytDlp: null }, setup: SETUP }).state,
+		...keys("enter", "enter"),
+	);
+	const installed = run(started.state, {
+		type: "installed",
+		id: idOf(started.effects, "install"),
+		result: { ok: true },
+	});
 	assert.deepEqual(installed.effects, [{ type: "checkTools" }]);
 	assert.equal(installed.state.screen, "dependencies");
 	const ready = run(installed.state, { type: "deps", deps: { mpv: true, ytDlp: "managed" } });
@@ -911,7 +1082,10 @@ test("S19 after Check again finds mpv, no account leaves for the connect screen 
 	assert.deepEqual(ready.effects, []);
 
 	// From the How to install mpv screen, too.
-	const help = run(init({ deps: { mpv: false, ytDlp: "system" }, setup: SETUP }).state, ...keys("enter", "down", "enter"));
+	const help = run(
+		init({ deps: { mpv: false, ytDlp: "system" }, setup: SETUP }).state,
+		...keys("enter", "down", "enter"),
+	);
 	const fromHelp = run(help.state, { type: "deps", deps: BOTH });
 	assert.equal(fromHelp.state.dialog, null);
 	assert.equal(fromHelp.state.screen, "connect");
@@ -950,7 +1124,20 @@ test("S19 Check again with a tool still missing stays on dependencies", () => {
 
 // S19: nothing typed on the gate verifies, loads, plays or opens main/connect; esc closes.
 test("S19 no key path from the dependencies screen starts a session", () => {
-	const all: Key[] = ["up", "down", "enter", "esc", "tab", "left", "right", "backspace", { text: "a" }, { text: " " }, { text: "/" }, { text: "r" }];
+	const all: Key[] = [
+		"up",
+		"down",
+		"enter",
+		"esc",
+		"tab",
+		"left",
+		"right",
+		"backspace",
+		{ text: "a" },
+		{ text: " " },
+		{ text: "/" },
+		{ text: "r" },
+	];
 	const allowed = new Set(["install", "cancel", "checkTools", "copy", "close"]);
 	for (const over of [{}, { account: ACCOUNT }, { anonymous: true }] as Partial<PopoverInit>[]) {
 		let frontier = [init({ ...over, deps: MISSING_BOTH, setup: SETUP }).state];
@@ -995,7 +1182,11 @@ test("S21 moving the right-pane cursor emits dwell with the track under it, and 
 test("S21 search results and Queue tracks under the cursor emit dwell", () => {
 	const anon = init({ anonymous: true, player: playerState() });
 	const typed = run(anon.state, ...keys({ text: "n" }, "enter"));
-	const results = run(typed.state, { type: "loaded", id: loadId(typed.effects), result: { ok: true, tracks: TRACKS } }, ...keys("down"));
+	const results = run(
+		typed.state,
+		{ type: "loaded", id: loadId(typed.effects), result: { ok: true, tracks: TRACKS } },
+		...keys("down"),
+	);
 	assert.deepEqual(dwells(results.effects), [{ type: "dwell", track: TRACKS[0] }]);
 
 	const { state } = loadedMain();
@@ -1021,7 +1212,11 @@ test("S23 Tab, left and right leave the Account choice for the left pane and com
 		assert.equal(moved.state.leftKey, "search", "up moves the left cursor");
 		const back = run(moved.state, ...keys(k === "tab" ? "tab" : "right"));
 		assert.equal(back.state.focus, "right");
-		assert.deepEqual(run(back.state, ...keys("down", "enter")).effects, [{ type: "clearAccount" }], "the choice answers again");
+		assert.deepEqual(
+			run(back.state, ...keys("down", "enter")).effects,
+			[{ type: "clearAccount" }],
+			"the choice answers again",
+		);
 	}
 	// Another left row opens its source and closes the choice.
 	const opened = run(menu, ...keys("tab", "up", "up", "enter"));
@@ -1051,10 +1246,21 @@ test("S23 . and , seek 5 s in both panes, are typed in the search input, and do 
 	}
 	const input = run(main, ...keys({ text: "/" }, { text: "a" }, { text: "." }, { text: "," }));
 	assert.equal(input.state.query, "a.,");
-	assert.deepEqual(input.effects.filter((e) => e.type === "seek"), []);
+	assert.deepEqual(
+		input.effects.filter((e) => e.type === "seek"),
+		[],
+	);
 	const searched = run(input.state, ...keys("enter"));
-	const results = run(searched.state, { type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } }, ...keys("down"));
-	assert.deepEqual(run(results.state, ...keys({ text: "." })).effects, [{ type: "seek", seconds: 5 }], "on results they seek");
+	const results = run(
+		searched.state,
+		{ type: "loaded", id: loadId(searched.effects), result: { ok: true, tracks: TRACKS } },
+		...keys("down"),
+	);
+	assert.deepEqual(
+		run(results.state, ...keys({ text: "." })).effects,
+		[{ type: "seek", seconds: 5 }],
+		"on results they seek",
+	);
 	assert.equal(run(results.state, ...keys({ text: "." })).state.query, "a.,");
 	const idle = run(main, { type: "player", state: playerState({ idle: true }) }).state;
 	assert.deepEqual(run(idle, ...keys({ text: "." })).effects, []);
@@ -1065,7 +1271,10 @@ test("S23 the update offer is kept apart from the notices and is not offered on 
 	const offer = offered("managed");
 	assert.equal(offer.offer, "2026.11.05");
 	assert.equal(offer.notice, null);
-	const gate = run(init({ deps: { mpv: false, ytDlp: "managed" } }).state, { type: "updateAvailable", latest: "2026.11.05" });
+	const gate = run(init({ deps: { mpv: false, ytDlp: "managed" } }).state, {
+		type: "updateAvailable",
+		latest: "2026.11.05",
+	});
 	assert.equal(gate.state.offer, null);
 	const busy = run(offer, { type: "playerError", error: { message: "mpv not found", hint: "x" } });
 	assert.equal(busy.state.notice?.message, "mpv not found");
@@ -1075,12 +1284,16 @@ test("S23 the update offer is kept apart from the notices and is not offered on 
 // S23(1): clicks map to the same actions as the keys, per element type.
 test("S23 clicks select and open left rows, select then play tracks, and activate actions", () => {
 	const main = loadedMain().state;
-	const click = (state: PopoverState, target: Target, ratio?: number) => run(state, { type: "click", target, ...(ratio === undefined ? {} : { ratio }) });
+	const click = (state: PopoverState, target: Target, ratio?: number) =>
+		run(state, { type: "click", target, ...(ratio === undefined ? {} : { ratio }) });
 
 	const history = click(main, { type: "left", key: "history" });
 	assert.equal(history.state.focus, "right");
 	assert.equal(history.state.leftKey, "history");
-	assert.deepEqual(history.effects.filter((e) => e.type === "load").map((e) => e.type === "load" && e.request), [{ kind: "history" }]);
+	assert.deepEqual(
+		history.effects.filter((e) => e.type === "load").map((e) => e.type === "load" && e.request),
+		[{ kind: "history" }],
+	);
 	assert.equal(click(main, { type: "left", key: "playlists" }).effects[0].type, "loadPlaylists");
 	assert.equal(click(main, { type: "left", key: "account" }).state.accountMenu, 0);
 	assert.deepEqual(click(main, { type: "left", key: "nope" }).effects, []);
@@ -1090,7 +1303,9 @@ test("S23 clicks select and open left rows, select then play tracks, and activat
 	assert.equal(selected.state.focus, "right");
 	assert.equal(selected.state.rightIndex, 3);
 	assert.deepEqual(selected.effects, [{ type: "dwell", track: TRACKS[1] }], "a first click only selects");
-	assert.deepEqual(click(selected.state, { type: "right", index: 3 }).effects, [{ type: "play", tracks: TRACKS, index: 1 }]);
+	assert.deepEqual(click(selected.state, { type: "right", index: 3 }).effects, [
+		{ type: "play", tracks: TRACKS, index: 1 },
+	]);
 	assert.deepEqual(click(main, { type: "right", index: 0 }).effects, [{ type: "play", tracks: TRACKS, index: 0 }]);
 	assert.deepEqual(click(main, { type: "right", index: 1 }).effects, [
 		{ type: "play", tracks: TRACKS, index: 0 },
@@ -1111,45 +1326,82 @@ test("S23 clicks select and open left rows, select then play tracks, and activat
 test("S23 clicks on Load more, connect options, Dependencies rows, dialog buttons and the notice", () => {
 	const more = onLoadMore().state;
 	const loadMoreClick = run(more, ...keys("up"), { type: "click", target: { type: "right", index: 5 } });
-	assert.deepEqual(loadMoreClick.effects.filter((e) => e.type === "load").map((e) => e.type === "load" && e.request), [{ kind: "recommended", start: 4 }]);
+	assert.deepEqual(
+		loadMoreClick.effects.filter((e) => e.type === "load").map((e) => e.type === "load" && e.request),
+		[{ kind: "recommended", start: 4 }],
+	);
 
 	const connect = init().state;
 	const verify = run(connect, { type: "click", target: { type: "connect", index: 1 } });
-	assert.deepEqual(verify.effects, [{ type: "verify", id: idOf(verify.effects, "verify"), account: { browser: "chromium", profile: "Default" } }]);
-	assert.equal(run(connect, { type: "click", target: { type: "connect", index: 2 } }).state.screen, "main", "Continue without an account");
+	assert.deepEqual(verify.effects, [
+		{ type: "verify", id: idOf(verify.effects, "verify"), account: { browser: "chromium", profile: "Default" } },
+	]);
+	assert.equal(
+		run(connect, { type: "click", target: { type: "connect", index: 2 } }).state.screen,
+		"main",
+		"Continue without an account",
+	);
 
 	const gate = gateMissing();
-	assert.equal(run(gate.state, { type: "click", target: { type: "dependency", index: 0 } }).state.dialog?.type, "confirm");
+	assert.equal(
+		run(gate.state, { type: "click", target: { type: "dependency", index: 0 } }).state.dialog?.type,
+		"confirm",
+	);
 	assert.equal(run(gate.state, { type: "click", target: { type: "dependency", index: 1 } }).state.dialog?.type, "mpv");
-	assert.deepEqual(run(gate.state, { type: "click", target: { type: "dependency", index: 2 } }).effects, [{ type: "checkTools" }]);
-	assert.deepEqual(run(gate.state, { type: "click", target: { type: "left", key: "search" } }).effects, [], "main targets are ignored here");
+	assert.deepEqual(run(gate.state, { type: "click", target: { type: "dependency", index: 2 } }).effects, [
+		{ type: "checkTools" },
+	]);
+	assert.deepEqual(
+		run(gate.state, { type: "click", target: { type: "left", key: "search" } }).effects,
+		[],
+		"main targets are ignored here",
+	);
 
 	const confirm = run(gate.state, ...keys("enter")).state;
 	const install = run(confirm, { type: "click", target: { type: "dialog", index: 0 } });
 	assert.deepEqual(install.effects, [{ type: "install", id: idOf(install.effects, "install") }]);
 	assert.equal(run(confirm, { type: "click", target: { type: "dialog", index: 1 } }).state.dialog, null, "Cancel");
-	assert.deepEqual(run(confirm, { type: "click", target: { type: "dependency", index: 2 } }).effects, [], "rows under a dialog are ignored");
+	assert.deepEqual(
+		run(confirm, { type: "click", target: { type: "dependency", index: 2 } }).effects,
+		[],
+		"rows under a dialog are ignored",
+	);
 	const mpv = run(gate.state, ...keys("down", "enter")).state;
-	assert.deepEqual(run(mpv, { type: "click", target: { type: "dialog", index: 0 } }).effects, [{ type: "copy", text: "sudo pacman -S mpv" }]);
+	assert.deepEqual(run(mpv, { type: "click", target: { type: "dialog", index: 0 } }).effects, [
+		{ type: "copy", text: "sudo pacman -S mpv" },
+	]);
 
 	const start = init({ account: ACCOUNT, deps: { mpv: true, ytDlp: "managed" }, setup: SETUP });
 	const failed = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: false, error: EXTRACT } });
 	const update = run(failed.state, { type: "click", target: { type: "notice", choice: "action" } });
 	assert.deepEqual(update.effects, [{ type: "update", id: idOf(update.effects, "update") }]);
-	assert.deepEqual(run(init({ account: ACCOUNT }).state, { type: "click", target: { type: "notice", choice: "action" } }).effects, [], "no notice: ignored");
+	assert.deepEqual(
+		run(init({ account: ACCOUNT }).state, { type: "click", target: { type: "notice", choice: "action" } }).effects,
+		[],
+		"no notice: ignored",
+	);
 });
 
 // S23(1): the player row's ⏮ ⏸/▶ ⏭ and progress bar.
 test("S23 player controls and a progress-bar click seek to that position", () => {
 	const main = playingMain();
-	const control = (c: "prev" | "toggle" | "next") => run(main, { type: "click", target: { type: "control", control: c } }).effects;
+	const control = (c: "prev" | "toggle" | "next") =>
+		run(main, { type: "click", target: { type: "control", control: c } }).effects;
 	assert.deepEqual(control("prev"), [{ type: "prev" }]);
 	assert.deepEqual(control("toggle"), [{ type: "togglePause" }]);
 	assert.deepEqual(control("next"), [{ type: "next" }]);
-	assert.deepEqual(run(main, { type: "click", target: { type: "bar" }, ratio: 0.5 }).effects, [{ type: "seek", seconds: 126, absolute: true }]);
-	assert.deepEqual(run(main, { type: "click", target: { type: "bar" }, ratio: 1.4 }).effects, [{ type: "seek", seconds: 252, absolute: true }]);
+	assert.deepEqual(run(main, { type: "click", target: { type: "bar" }, ratio: 0.5 }).effects, [
+		{ type: "seek", seconds: 126, absolute: true },
+	]);
+	assert.deepEqual(run(main, { type: "click", target: { type: "bar" }, ratio: 1.4 }).effects, [
+		{ type: "seek", seconds: 252, absolute: true },
+	]);
 	const live = run(main, { type: "player", state: playerState({ duration: null }) }).state;
-	assert.deepEqual(run(live, { type: "click", target: { type: "bar" }, ratio: 0.5 }).effects, [], "no duration: no seek");
+	assert.deepEqual(
+		run(live, { type: "click", target: { type: "bar" }, ratio: 0.5 }).effects,
+		[],
+		"no duration: no seek",
+	);
 });
 
 // S23(1): the wheel moves the selection of the pane under the pointer, one step per event.
@@ -1186,7 +1438,10 @@ test("S25 the update offer stays while moving, switching panes, searching, playi
 	);
 	assert.equal(used.state.offer, "2026.11.05");
 	assert.deepEqual(dismissals(used.effects), []);
-	assert.deepEqual(used.effects.filter((e) => e.type === "update"), []);
+	assert.deepEqual(
+		used.effects.filter((e) => e.type === "update"),
+		[],
+	);
 });
 
 // S25: `u` runs Update from anywhere outside the search input; the offer goes and is not offered again.
@@ -1201,7 +1456,10 @@ test("S25 u updates yt-dlp and closes the offer for the session", () => {
 	}
 	const system = run(offered("system"), ...keys(u));
 	assert.deepEqual(system.effects, [{ type: "dismissUpdate" }]);
-	assert.deepEqual(system.state.notice, { message: "yt-dlp comes from your system.", hint: "Update yt-dlp with your package manager." });
+	assert.deepEqual(system.state.notice, {
+		message: "yt-dlp comes from your system.",
+		hint: "Update yt-dlp with your package manager.",
+	});
 });
 
 // S25: `l` is Later: the offer goes for the Pi session without updating.
@@ -1227,7 +1485,10 @@ test("S25 u and l typed into the search input are characters", () => {
 	const out = run(input, ...keys(u, l, { text: "x" }));
 	assert.equal(out.state.query, "ulx");
 	assert.equal(out.state.offer, "2026.11.05");
-	assert.deepEqual(out.effects.filter((e) => e.type === "update" || e.type === "dismissUpdate"), []);
+	assert.deepEqual(
+		out.effects.filter((e) => e.type === "update" || e.type === "dismissUpdate"),
+		[],
+	);
 });
 
 // S25: clicks on ▸ Update and Later do what u and l do.
@@ -1263,7 +1524,10 @@ test("S25 a pending Load more cancelled by the connect screen is asked again on 
 
 // S25: esc back to main with nothing pending loads nothing.
 test("S25 esc back to main with no pending load emits no effect", () => {
-	const connect = run(onLoadMore().state, ...keys("left", ...Array.from({ length: 7 }, (): Key => "down"), "enter", "enter"));
+	const connect = run(
+		onLoadMore().state,
+		...keys("left", ...Array.from({ length: 7 }, (): Key => "down"), "enter", "enter"),
+	);
 	assert.deepEqual(connect.effects, []);
 	const back = run(connect.state, ...keys("esc"));
 	assert.deepEqual(back.effects, []);
@@ -1289,7 +1553,11 @@ test("S26 Update with unknown tools runs the update instead of saying yt-dlp is 
 // S27: search results are one page; a result that says hasMore never adds a Load more row the cursor cannot reach.
 test("S27 search results never offer Load more, even when the result says hasMore", () => {
 	const anon = run(init({ anonymous: true }).state, ...keys({ text: "x" }, "enter"));
-	const { state } = run(anon.state, { type: "loaded", id: loadId(anon.effects), result: { ok: true, tracks: TRACKS, hasMore: true } });
+	const { state } = run(anon.state, {
+		type: "loaded",
+		id: loadId(anon.effects),
+		result: { ok: true, tracks: TRACKS, hasMore: true },
+	});
 	assert.equal(hasLoadMore(state), false);
 	assert.equal(loadMoreIndex(state), -1);
 	const last = run(state, ...keys("down", "down", "down", "down", "down"));

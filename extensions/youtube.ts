@@ -644,7 +644,8 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 		async function open(ctx: ExtensionCommandContext) {
 			const home = deps.home ?? os.homedir();
 			const [config, browsers, found, setup] = await Promise.all([
-				readConfig({ home }).catch((): Config => ({ version: 1, account: null })),
+				// readConfig only throws on an unexpected error, so the saved account is just as unusable.
+				readConfig({ home }).catch((): Config => ({ version: 1, account: null, malformed: true })),
 				detectBrowsers({ home }).catch((): Browser[] => []),
 				resolveTools({ home, env })
 					.then((t) => {
@@ -655,7 +656,8 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				setupInfo(home),
 			]);
 			account = config.account;
-			const init = { account, anonymous, browsers, deps: found, setup, player: null };
+			const configUnreadable = config.malformed === true;
+			const init = { account, anonymous, browsers, deps: found, setup, player: null, configUnreadable };
 			await ctx.ui.custom<void>(
 				(tui, theme, keybindings, done) =>
 					popover(

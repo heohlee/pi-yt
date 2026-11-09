@@ -456,6 +456,32 @@ async function openYt(h: ReturnType<typeof harness>) {
 }
 const count = (calls: { fn: string }[], fn: string) => calls.filter((c) => c.fn === fn).length;
 
+// #46: a saved account that could not be read (or a read that threw) is reported on connect; a missing one is not.
+test("/yt reports an unreadable saved account on the connect screen, but not a missing one", async () => {
+	const NOTICE = /│ Saved account could not be read\. {2}Pick a browser profile to connect again\.\s+│$/;
+	const cases: [string, YoutubeDeps["readConfig"], boolean][] = [
+		["malformed", async () => ({ version: 1, account: null, malformed: true }), true],
+		["thrown", async () => Promise.reject(new Error("boom")), true],
+		["missing", async () => ({ version: 1, account: null }), false],
+	];
+	for (const [label, readConfig, shown] of cases) {
+		const h = harness({ readConfig });
+		const ui = await openYt(h);
+		const lines = ui.lines();
+		assert.ok(
+			lines.some((l) => /YouTube\s+not connected/.test(l)),
+			`${label}\n${lines.join("\n")}`,
+		);
+		assert.equal(
+			lines.some((l) => NOTICE.test(l)),
+			shown,
+			`${label}\n${lines.join("\n")}`,
+		);
+		assert.deepEqual(h.writes, [], label);
+		await ui.close();
+	}
+});
+
 // S14: a list loaded once in this Pi session opens instantly the next time.
 test("S14 reopening a loaded source uses the session cache and does not call yt-dlp", async () => {
 	const rec = recordingSource();

@@ -28,7 +28,7 @@ Run before the first write of any change: feature, bug, chore, docs, or skill ed
    cd ../<repo>-worktrees/<type>-<slug>
    ```
 
-2. Work, test and commit only inside that worktree. There is no build step: the tests run without installing anything (`node --test tests/`); run `npm ci` once for the type check and lint (`npm run typecheck`, `npm run lint`).
+2. Work, test and commit only inside that worktree. There is no build step: the tests run without installing anything (`npm test`); run `npm ci` once for the type check and lint (`npm run typecheck`, `npm run lint`).
 
 3. After the PR is merged, remove the worktree from the main checkout with `git worktree remove ../<repo>-worktrees/<type>-<slug>`, only with authorization.
 

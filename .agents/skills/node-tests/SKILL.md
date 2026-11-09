@@ -18,7 +18,7 @@ Do not use for passive documentation or release copy with no test-behavior impac
 | Item | Convention |
 | --- | --- |
 | Location | `tests/<area>.test.ts`, one file per module or behavior area |
-| Runner | `node:test` (`test`, `describe`, `beforeEach`, `afterEach`), run by `node --test tests/` |
+| Runner | `node:test` (`test`, `describe`, `beforeEach`, `afterEach`), run by `npm test` (`node --test 'tests/*.test.ts'`) |
 | Assertions | `node:assert/strict` only (`assert.equal`, `assert.deepEqual`, `assert.rejects`, `assert.match` when a pattern is the contract) |
 | Language | TypeScript run natively by Node 24 or newer through type stripping; no build step, no test framework dependency |
 | Fakes | Shared fakes live under `tests/`; reuse them before writing a new one |
@@ -51,7 +51,7 @@ Do not use for passive documentation or release copy with no test-behavior impac
 1. Read the existing tests for the area and reuse their fakes and helpers.
 2. Add a focused behavior test, observe its intended failure, then implement the smallest change. Preserve previous behavior through the public interface.
 3. Run the focused file first: `node --test tests/<area>.test.ts`. Filter one test with `node --test --test-name-pattern="<name>" tests/<area>.test.ts`.
-4. Run the closing gates CI runs: `node --test tests/`, `npm run typecheck`, `npm run lint` and, for packaging changes, `npm pack --dry-run` (run `npm ci` once first).
+4. Run the closing gates CI runs: `npm test`, `npm run typecheck`, `npm run lint` and, for packaging changes, `npm pack --dry-run` (run `npm ci` once first).
 5. Record exact commands, results, environmental limits and skipped gates. Documentation-only work needs proportionate structural checks, not invented test evidence.
 
 ## Output Contract

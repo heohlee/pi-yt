@@ -128,3 +128,12 @@ test('workflow runs only trusted base code with read-only permissions', () => {
     assert.match(line, /^\s*(?:- )?uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/);
   }
 });
+
+test('workflow skips only the issue validation for Dependabot pull requests', () => {
+  const workflow = fs.readFileSync('.github/workflows/pr-issue.yml', 'utf8');
+  const validate = workflow.split('      - name: Validate linked issue\n')[1].split('\n      - ')[0];
+  assert.match(validate, /^        if: github\.event\.pull_request\.user\.login != 'dependabot\[bot\]'$/m);
+  const tests = workflow.split('      - name: Test issue validator\n')[1].split('\n      - ')[0];
+  assert.doesNotMatch(tests, /if:/);
+  assert.equal(workflow.match(/^\s+if:/gm).length, 1);
+});

@@ -44,12 +44,16 @@ npm pack --dry-run     # package contents
 
 Run a single test file with `node --test tests/<name>.test.ts`.
 
+### Security checks
+
+The `Security` workflow runs CodeQL (JavaScript/TypeScript) and `npm audit --audit-level=high` on pull requests, on pushes to `main` and weekly. It is not part of the required `CI` check, but treat a failure as something to fix or explain. Dependabot opens grouped update PRs for GitHub Actions and npm every week.
+
 ## Pull requests and merging
 
 - Follow the PR template: Why, Summary, Verification, Not verified, and `Closes #<number>`.
 - Report checks actually run and explicitly list anything not verified, including manual checks in Pi or Gentle Shell.
 - Keep the change focused on its governing issue; update the issue if scope changes.
-- The `pr-issue` check requires a standalone `Closes #<number>` line referencing a real issue in this repository. References inside HTML comments and the template placeholder do not count.
+- The `pr-issue` check requires a standalone `Closes #<number>` line referencing a real issue in this repository. References inside HTML comments, fenced code blocks and the template placeholder do not count. Dependabot update PRs are exempt.
 - Wait for all required checks to be green, including on documentation-only PRs. Local results are not proof that remote checks passed.
 - Maintainers merge with a **merge commit**, not squash or rebase.
 

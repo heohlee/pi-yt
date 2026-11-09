@@ -32,7 +32,9 @@ jobs:
       - name: Test issue validator
         run: node --test .github/scripts/pr-issue.test.cjs
 
+      # Dependabot update PRs have no issue to close; the check still reports and the tests above still run.
       - name: Validate linked issue
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |

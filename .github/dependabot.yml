@@ -27,6 +27,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # The Node types follow the minimum supported Node version (engines.node), not the newest release.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       npm:
         patterns: ['*']

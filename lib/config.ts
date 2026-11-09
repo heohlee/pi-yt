@@ -1,6 +1,6 @@
-import path from "node:path";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { isBrowserId, isProfileFor, type BrowserId } from "./browsers.ts";
+import path from "node:path";
+import { type BrowserId, isBrowserId, isProfileFor } from "./browsers.ts";
 
 // Stores only which browser profile yt-dlp should read cookies from, never cookies.
 

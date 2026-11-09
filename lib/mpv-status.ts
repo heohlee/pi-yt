@@ -108,7 +108,13 @@ export function startMpvStatus(deps: MpvStatusDeps): MpvStatusHandle {
 		const state = toState(props);
 		const text = formatNowPlaying(state);
 		// Everything except elapsed time: a change here publishes immediately.
-		const shape = JSON.stringify([text === undefined, state.status, state.title, state.artist, formatTime(state.duration)]);
+		const shape = JSON.stringify([
+			text === undefined,
+			state.status,
+			state.title,
+			state.artist,
+			formatTime(state.duration),
+		]);
 		if (shape !== lastShape) {
 			lastShape = shape;
 			publish(text);

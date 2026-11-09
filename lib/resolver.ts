@@ -71,15 +71,32 @@ const EXTRACT: ResolveError = {
 	message: "yt-dlp could not read YouTube.",
 	hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry.",
 };
-const NETWORK: ResolveError = { kind: "network", message: "Could not reach YouTube.", hint: "Check your connection and retry." };
+const NETWORK: ResolveError = {
+	kind: "network",
+	message: "Could not reach YouTube.",
+	hint: "Check your connection and retry.",
+};
 // A bot check or rate limit: the session and the connection are fine, YouTube refuses this client for a while.
-const BLOCKED: ResolveError = { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." };
+const BLOCKED: ResolveError = {
+	kind: "network",
+	message: "YouTube is limiting requests right now.",
+	hint: "Wait a few minutes, then retry.",
+};
 
 function classify(stderr: string, account: Account | null | undefined): ResolveError {
 	if (/sign in|login required|cookies|not available for this account|private/i.test(stderr)) {
-		if (!account) return { kind: "signin", message: "No YouTube account connected.", hint: "Connect a browser session in /yt, then retry." };
+		if (!account)
+			return {
+				kind: "signin",
+				message: "No YouTube account connected.",
+				hint: "Connect a browser session in /yt, then retry.",
+			};
 		const label = browserLabel(account.browser);
-		return { kind: "signin", message: `YouTube session not found in ${label}.`, hint: `Sign in at youtube.com in ${label}, then retry.` };
+		return {
+			kind: "signin",
+			message: `YouTube session not found in ${label}.`,
+			hint: `Sign in at youtube.com in ${label}, then retry.`,
+		};
 	}
 	if (/unable to download|network|timed out|resolve host/i.test(stderr)) return { ...NETWORK };
 	return { ...EXTRACT };
@@ -143,7 +160,10 @@ function attempt(track: Track, extra: readonly string[], opts: ResolveOptions, c
 		try {
 			child = (opts.spawn ?? defaultSpawn)(opts.ytDlpPath ?? "yt-dlp", args);
 		} catch (error) {
-			finish({ ok: false, error: (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...MISSING } : { ...EXTRACT } });
+			finish({
+				ok: false,
+				error: (error as NodeJS.ErrnoException).code === "ENOENT" ? { ...MISSING } : { ...EXTRACT },
+			});
 			return;
 		}
 
@@ -229,7 +249,11 @@ async function untilReady(url: string, opts: ResolveOptions): Promise<ResolveRes
 const cooldownKey = (strategy: string, cookieArg: string | undefined) => JSON.stringify([strategy, cookieArg ?? ""]);
 
 /** Whether any strategy was blocked for this account within STRATEGY_COOLDOWN_MS; background work waits then. */
-export function blockedRecently(cooldowns: Map<string, number>, cookieArg: string | undefined, now: () => number = Date.now): boolean {
+export function blockedRecently(
+	cooldowns: Map<string, number>,
+	cookieArg: string | undefined,
+	now: () => number = Date.now,
+): boolean {
 	return STRATEGIES.some(({ name }) => {
 		const at = cooldowns.get(cooldownKey(name, cookieArg));
 		return at !== undefined && now() - at < STRATEGY_COOLDOWN_MS;
@@ -263,7 +287,13 @@ export async function resolveAudio(track: Track, opts: ResolveOptions = {}): Pro
 		}
 		// A hidden block (e.g. a PO token requirement) can surface as "format not available" on every video:
 		// VIDEO_STREAK_LIMIT video or other failures in a row count as a block, so the worst case stays as before.
-		if ((run.failure === "video" || run.failure === "other") && !last && opts.cooldowns && result.error.kind !== "missing" && !opts.signal?.aborted) {
+		if (
+			(run.failure === "video" || run.failure === "other") &&
+			!last &&
+			opts.cooldowns &&
+			result.error.kind !== "missing" &&
+			!opts.signal?.aborted
+		) {
 			const count = (opts.cooldowns.get(streak) ?? 0) + 1;
 			if (count >= VIDEO_STREAK_LIMIT) {
 				opts.cooldowns.set(key, now());

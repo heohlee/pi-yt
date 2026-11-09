@@ -1,7 +1,7 @@
-import path from "node:path";
+import { spawn as nodeSpawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, open, rename, unlink } from "node:fs/promises";
-import { spawn as nodeSpawn } from "node:child_process";
+import path from "node:path";
 import { managedBinDir } from "./tools.ts";
 import type { SpawnFn } from "./youtube-source.ts";
 
@@ -67,7 +67,11 @@ const CANCELLED: InstallError = { kind: "cancelled", message: "Install cancelled
 const TIMEOUT: InstallError = { kind: "timeout", message: "The download took too long.", hint: RETRY_HINT };
 const NETWORK: InstallError = { kind: "network", message: "Could not download yt-dlp.", hint: RETRY_HINT };
 const TOO_LARGE: InstallError = { kind: "size", message: "The download is larger than expected.", hint: NOT_INSTALLED };
-const MISMATCH: InstallError = { kind: "hash", message: "The download did not match the official checksum.", hint: NOT_INSTALLED };
+const MISMATCH: InstallError = {
+	kind: "hash",
+	message: "The download did not match the official checksum.",
+	hint: NOT_INSTALLED,
+};
 
 /** `path` with the home folder shown as `~`. */
 export function tildePath(file: string, home: string): string {
@@ -189,7 +193,11 @@ export async function installYtDlp(opts: InstallOptions): Promise<InstallResult>
 		if (error instanceof Stop) return { ok: false, error: { ...error.reason } };
 		return {
 			ok: false,
-			error: { kind: "write", message: "Could not save yt-dlp.", hint: `Check that ${tildePath(dir, opts.home)} is writable.` },
+			error: {
+				kind: "write",
+				message: "Could not save yt-dlp.",
+				hint: `Check that ${tildePath(dir, opts.home)} is writable.`,
+			},
 		};
 	}
 }
@@ -211,9 +219,14 @@ export function updateYtDlp(opts: UpdateOptions): Promise<UpdateResult> {
 	if (opts.source !== "managed")
 		return Promise.resolve({
 			ok: false,
-			error: { kind: "system", message: "yt-dlp comes from your system.", hint: "Update yt-dlp with your package manager." },
+			error: {
+				kind: "system",
+				message: "yt-dlp comes from your system.",
+				hint: "Update yt-dlp with your package manager.",
+			},
 		});
-	if (opts.signal?.aborted) return Promise.resolve({ ok: false, error: { ...CANCELLED, message: "Update cancelled." } });
+	if (opts.signal?.aborted)
+		return Promise.resolve({ ok: false, error: { ...CANCELLED, message: "Update cancelled." } });
 
 	return new Promise((resolve) => {
 		let settled = false;
@@ -240,7 +253,10 @@ export function updateYtDlp(opts: UpdateOptions): Promise<UpdateResult> {
 		try {
 			child = (opts.spawn ?? defaultSpawn)(opts.path, ["-U"]);
 		} catch (error) {
-			finish({ ok: false, error: (error as NodeJS.ErrnoException).code === "ENOENT" ? missing() : { ...UPDATE_FAILED } });
+			finish({
+				ok: false,
+				error: (error as NodeJS.ErrnoException).code === "ENOENT" ? missing() : { ...UPDATE_FAILED },
+			});
 			return;
 		}
 		opts.signal?.addEventListener("abort", onAbort, { once: true });
@@ -251,9 +267,15 @@ export function updateYtDlp(opts: UpdateOptions): Promise<UpdateResult> {
 		// Drain the pipes so yt-dlp never blocks on them; their text is not used.
 		child.stdout?.resume();
 		child.stderr?.resume();
-		child.on("error", (error) => finish({ ok: false, error: error.code === "ENOENT" ? missing() : { ...UPDATE_FAILED } }));
+		child.on("error", (error) =>
+			finish({ ok: false, error: error.code === "ENOENT" ? missing() : { ...UPDATE_FAILED } }),
+		);
 		child.on("close", (code) => finish(code === 0 ? { ok: true } : { ok: false, error: { ...UPDATE_FAILED } }));
 	});
 }
 
-const missing = (): InstallError => ({ kind: "missing", message: "yt-dlp not found", hint: "Install yt-dlp from /yt." });
+const missing = (): InstallError => ({
+	kind: "missing",
+	message: "yt-dlp not found",
+	hint: "Install yt-dlp from /yt.",
+});

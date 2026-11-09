@@ -141,7 +141,8 @@ type RunResult = { ok: true; data: unknown } | Failure;
 
 function runYtDlp(target: string, extra: string[], opts: SourceOptions): Promise<RunResult> {
 	const args = ["--flat-playlist", "-J", "--no-warnings", ...jsRuntimeArgs()];
-	if (opts.account) args.push("--cookies-from-browser", cookieArg({ id: opts.account.browser, profile: opts.account.profile }));
+	if (opts.account)
+		args.push("--cookies-from-browser", cookieArg({ id: opts.account.browser, profile: opts.account.profile }));
 	args.push(...extra, target);
 
 	if (opts.signal?.aborted) return Promise.resolve(fail({ ...CANCELLED }));

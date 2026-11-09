@@ -1,7 +1,7 @@
-import path from "node:path";
+import { spawn as nodeSpawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, readFile, stat } from "node:fs/promises";
-import { spawn as nodeSpawn } from "node:child_process";
+import path from "node:path";
 import type { Writable } from "node:stream";
 
 // Finds yt-dlp and mpv. A yt-dlp on PATH wins over the copy /yt installs into
@@ -52,7 +52,8 @@ export async function findExecutable(name: string, dirs: string[]): Promise<stri
 }
 
 // Relative PATH entries (".", "bin") depend on the current directory, so they are never searched.
-const pathDirs = (env: NodeJS.ProcessEnv) => (env.PATH ?? "").split(path.delimiter).filter((dir) => dir && path.isAbsolute(dir));
+const pathDirs = (env: NodeJS.ProcessEnv) =>
+	(env.PATH ?? "").split(path.delimiter).filter((dir) => dir && path.isAbsolute(dir));
 
 export async function resolveTools({ home, env = process.env }: ToolsLocation): Promise<Tools> {
 	const dirs = pathDirs(env);
@@ -99,7 +100,13 @@ const MPV_COMMANDS: [string[], string][] = [
 ];
 
 /** The package-manager command that installs mpv here, or null with a pointer to mpv.io. */
-export function mpvInstallHint({ platform, osRelease }: { platform: NodeJS.Platform | string; osRelease: string | null }): {
+export function mpvInstallHint({
+	platform,
+	osRelease,
+}: {
+	platform: NodeJS.Platform | string;
+	osRelease: string | null;
+}): {
 	command: string | null;
 	text: string;
 } {
@@ -128,7 +135,8 @@ const CLIPBOARD_TOOLS: [string, string[]][] = [
 	["pbcopy", []],
 ];
 
-const defaultClipboardSpawn: ClipboardSpawn = (command, args) => nodeSpawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
+const defaultClipboardSpawn: ClipboardSpawn = (command, args) =>
+	nodeSpawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
 
 function copyWith(file: string, args: string[], text: string, spawn: ClipboardSpawn): Promise<boolean> {
 	return new Promise((resolve) => {

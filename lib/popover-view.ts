@@ -1,28 +1,28 @@
 import { browserLabel } from "./browsers.ts";
-import { formatTime, sanitize } from "./now-playing.ts";
 import { YT_DLP_LICENSE, YT_DLP_SOURCE } from "./installer.ts";
+import { formatTime, sanitize } from "./now-playing.ts";
 import {
 	ACCOUNT_CHOICES,
 	accountLabel,
 	connectOptions,
+	type DependencyOption,
+	type DialogChoice,
 	dependencyOptions,
 	dialogChoices,
-	mpvSetup,
 	hasAccount,
-	offerShown,
 	hasLoadMore,
+	type LeftRow,
 	leftRows,
 	loadMoreIndex,
+	mpvSetup,
+	type NoticeAction,
+	offerShown,
+	type PopoverState,
 	selectedTrack,
 	sourceKey,
 	sourceLabel,
-	trackOffset,
-	type DependencyOption,
-	type DialogChoice,
-	type LeftRow,
-	type NoticeAction,
-	type PopoverState,
 	type Target,
+	trackOffset,
 } from "./popover-model.ts";
 import { pad, padStart, spread, truncate, visibleWidth, wrap } from "./text.ts";
 import type { Track } from "./youtube-source.ts";
@@ -166,9 +166,16 @@ export function renderFrame(state: PopoverState, opts: ViewOptions): Frame {
 	for (const { y, span } of marks.hits) {
 		const x = Math.max(0, span.x);
 		const end = Math.min(inner, span.end);
-		if (end > x && y < body.length) hits.push({ id: targetId(span.target), x: x + INSET, end: end + INSET, y: y + 1, target: span.target });
+		if (end > x && y < body.length)
+			hits.push({ id: targetId(span.target), x: x + INSET, end: end + INSET, y: y + 1, target: span.target });
 	}
-	const panes = marks.panes.map((p) => ({ ...p, x: p.x + INSET, end: p.end + INSET, top: p.top + 1, bottom: p.bottom + 1 }));
+	const panes = marks.panes.map((p) => ({
+		...p,
+		x: p.x + INSET,
+		end: p.end + INSET,
+		top: p.top + 1,
+		bottom: p.bottom + 1,
+	}));
 	const hovered = opts.hover ? hits.find((h) => h.id === opts.hover) : undefined;
 	if (hovered) lines[hovered.y] = paintCells(lines[hovered.y], hovered.x, hovered.end, (text) => t.fg("warning", text));
 	return { lines, hits, panes };
@@ -270,7 +277,8 @@ function paintCells(line: string, x: number, end: number, paint: (text: string) 
 }
 
 /** Note a hit on body line `y`. */
-const mark = (marks: Marks, y: number, x: number, end: number, target: Target) => marks.hits.push({ y, span: { x, end, target } });
+const mark = (marks: Marks, y: number, x: number, end: number, target: Target) =>
+	marks.hits.push({ y, span: { x, end, target } });
 
 function titleRow(state: PopoverState, inner: number, t: ViewTheme): string {
 	let right: string;
@@ -333,7 +341,11 @@ function connectBody(state: PopoverState, inner: number, t: ViewTheme, marks: Ma
 	pushNotice(lines, noticeRow(state, t, inner), marks);
 
 	const footer =
-		connect.phase === "verifying" ? "esc close" : connect.phase === "error" ? "enter select · esc close" : "enter connect · esc close";
+		connect.phase === "verifying"
+			? "esc close"
+			: connect.phase === "error"
+				? "enter select · esc close"
+				: "enter connect · esc close";
 	lines.push(RULE, t.fg("dim", footer));
 	return lines;
 }
@@ -356,7 +368,15 @@ function dependenciesBody(state: PopoverState, inner: number, t: ViewTheme, mark
 	};
 	const ytDlp = deps?.ytDlp ?? null;
 	option("install");
-	lines.push(tool("yt-dlp", "reads YouTube", ytDlp !== null, "install", ytDlp ? t.fg("dim", `(${ytDlp})`) : t.fg("accent", ACTION_LABELS.install)));
+	lines.push(
+		tool(
+			"yt-dlp",
+			"reads YouTube",
+			ytDlp !== null,
+			"install",
+			ytDlp ? t.fg("dim", `(${ytDlp})`) : t.fg("accent", ACTION_LABELS.install),
+		),
+	);
 	const mpv = deps?.mpv ?? false;
 	option("mpvHelp");
 	lines.push(tool("mpv", "plays the audio", mpv, "mpvHelp", mpv ? "" : t.fg("accent", ACTION_LABELS.mpv)));
@@ -502,7 +522,10 @@ function mainBody(state: PopoverState, inner: number, opts: ViewOptions, marks: 
 		place("left", 0, LEFT_WIDTH, left.spans);
 		place("right", LEFT_WIDTH + 3, rw, right.spans);
 		const rule = t.fg("border", "│");
-		panes = Array.from({ length: h }, (_, i) => `${pad(left.lines[i] ?? "", LEFT_WIDTH)} ${rule} ${pad(right.lines[i] ?? "", rw)}`);
+		panes = Array.from(
+			{ length: h },
+			(_, i) => `${pad(left.lines[i] ?? "", LEFT_WIDTH)} ${rule} ${pad(right.lines[i] ?? "", rw)}`,
+		);
 	}
 	const lines = [titleRow(state, inner, t), RULE, ...panes, RULE];
 	if (row) {
@@ -575,7 +598,9 @@ function currentTrackId(state: PopoverState): string | undefined {
 
 function accountPane(state: PopoverState, w: number, t: ViewTheme): PaneLines {
 	const focused = state.focus === "right";
-	const rows = ACCOUNT_CHOICES.map((choice, i) => optionRow(ACCOUNT_CHOICE_LABELS[choice], focused && i === state.accountMenu, w, t));
+	const rows = ACCOUNT_CHOICES.map((choice, i) =>
+		optionRow(ACCOUNT_CHOICE_LABELS[choice], focused && i === state.accountMenu, w, t),
+	);
 	const spans = ACCOUNT_CHOICES.map((_, index): Span[] => [{ x: 0, end: w, target: { type: "account", index } }]);
 	return { lines: [truncate(t.bold(accountLabel(state)), w), "", ...rows], spans: [[], [], ...spans] };
 }
@@ -600,7 +625,9 @@ function rightPane(state: PopoverState, w: number, h: number, t: ViewTheme, scro
 		const count = list.status === "ready" ? t.fg("dim", ` · ${list.tracks.length}`) : "";
 		const labels = list.tracks.length === 0 ? [] : ["▶ Play all", "⤮ Shuffle"];
 		const actions = labels
-			.map((a, i) => (focused && state.rightIndex === i ? t.selected(t.fg("accent", `▸ ${a}`)) : t.fg("muted", `  ${a}`)))
+			.map((a, i) =>
+				focused && state.rightIndex === i ? t.selected(t.fg("accent", `▸ ${a}`)) : t.fg("muted", `  ${a}`),
+			)
 			.join(" ");
 		header = spread(`${t.bold(sanitize(sourceLabel(source)))}${count}`, actions, w);
 		// The actions sit right-aligned: `  ▶ Play all ⤮ Shuffle`, each after its two-column marker.
@@ -627,14 +654,17 @@ function rightPane(state: PopoverState, w: number, h: number, t: ViewTheme, scro
 		const sel = focused ? selectedTrack(state) : -1;
 		const lines = trackRows(list.tracks, w, sel, currentTrackId(state), t);
 		if (list.more !== null) lines.push(t.fg("dim", "  Loading more…"));
-		else if (hasLoadMore(state)) lines.push(onMore ? optionRow(t.fg("dim", "Load more"), true, w, t) : t.fg("dim", "  Load more"));
+		else if (hasLoadMore(state))
+			lines.push(onMore ? optionRow(t.fg("dim", "Load more"), true, w, t) : t.fg("dim", "  Load more"));
 		const keep = onMore ? lines.length - 1 : sel >= 0 ? sel : state.rightIndex < trackOffset(state) ? 0 : -1;
 		content = windowed(lines, keep, rows, scroll, "right");
 		const more = list.more === null && hasLoadMore(state);
 		spans = content.map((_, i): Span[] => {
 			const at = scroll.right + i;
 			if (at < list.tracks.length) return [{ x: 0, end: w, target: { type: "right", index: trackOffset(state) + at } }];
-			return more && at === list.tracks.length ? [{ x: 0, end: w, target: { type: "right", index: loadMoreIndex(state) } }] : [];
+			return more && at === list.tracks.length
+				? [{ x: 0, end: w, target: { type: "right", index: loadMoreIndex(state) } }]
+				: [];
 		});
 	}
 	return { lines: [header, ...content.slice(0, rows)], spans: [headerSpans, ...spans.slice(0, rows)] };
@@ -683,7 +713,10 @@ function playerRow(state: PopoverState, inner: number, t: ViewTheme): Row {
 		const tail = `${label}${hints ? `  ${t.fg("dim", hints)}` : ""}`;
 		const room = Math.max(0, inner - 2 - visibleWidth(tail) - 2);
 		const artist = sanitize(p.artist);
-		const who = artist && room > visibleWidth(title) + 4 ? `${title}  ${t.fg("dim", truncate(artist, room - visibleWidth(title) - 2))}` : truncate(title, room);
+		const who =
+			artist && room > visibleWidth(title) + 4
+				? `${title}  ${t.fg("dim", truncate(artist, room - visibleWidth(title) - 2))}`
+				: truncate(title, room);
 		return { line: spread(`${t.fg("accent", "◌")} ${who}`, tail, inner), spans: [] };
 	}
 	if (!p?.running || p.idle || !title) {
@@ -695,7 +728,11 @@ function playerRow(state: PopoverState, inner: number, t: ViewTheme): Row {
 	const time = p.duration === null ? formatTime(p.elapsed) : `${formatTime(p.elapsed)}/${formatTime(p.duration)}`;
 	const status = `${time}  ⤮ ${p.shuffle ? "on" : "off"}  vol ${Math.round(p.volume)}%`;
 	const lead = `⏮ ${p.paused ? "⏸" : "▶"} ⏭`;
-	const spans: Span[] = CONTROLS.map((control, i) => ({ x: i * 2, end: i * 2 + 1, target: { type: "control", control } }));
+	const spans: Span[] = CONTROLS.map((control, i) => ({
+		x: i * 2,
+		end: i * 2 + 1,
+		target: { type: "control", control },
+	}));
 	const leadW = visibleWidth(lead) + 1;
 	// Hints give way first (n p and seek before the rest), so the title and a bar keep room; then the bar, then the title.
 	const fixed = leadW + visibleWidth(status) + 2 + 2;

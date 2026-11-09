@@ -1,47 +1,50 @@
 import os from "node:os";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
-import { cookieArg, detectBrowsers as defaultDetectBrowsers, type Browser } from "../lib/browsers.ts";
+import { type Browser, cookieArg, detectBrowsers as defaultDetectBrowsers } from "../lib/browsers.ts";
 import {
-	readConfig as defaultReadConfig,
-	writeConfig as defaultWriteConfig,
 	type Account,
 	type Config,
 	type ConfigLocation,
+	readConfig as defaultReadConfig,
+	writeConfig as defaultWriteConfig,
 } from "../lib/config.ts";
 import {
 	installYtDlp as defaultInstallYtDlp,
+	updateYtDlp as defaultUpdateYtDlp,
 	releaseAsset,
 	tildePath,
-	updateYtDlp as defaultUpdateYtDlp,
 	YT_DLP,
 } from "../lib/installer.ts";
 import { createPlayer as defaultCreatePlayer, type Player, type PlayerDeps } from "../lib/player.ts";
 import {
-	initPopover,
-	keyFromInput,
-	reduce,
-	snapshotPopover,
 	type Action,
 	type Deps,
 	type Effect,
+	initPopover,
+	keyFromInput,
 	type LoadRequest,
 	type Notice,
 	type PopoverSnapshot,
 	type PopoverState,
+	reduce,
 	type SetupInfo,
+	snapshotPopover,
 } from "../lib/popover-model.ts";
-import { hitAt, paneAt, renderFrame, type Frame, type Role, type Scroll, type ViewTheme } from "../lib/popover-view.ts";
+import { type Frame, hitAt, paneAt, type Role, renderFrame, type Scroll, type ViewTheme } from "../lib/popover-view.ts";
 import { blockedRecently, resolveAudio as defaultResolveAudio, probeStream } from "../lib/resolver.ts";
 import {
 	copyToClipboard as defaultCopyToClipboard,
-	managedBinDir,
-	mpvInstallHint,
 	readOsRelease as defaultReadOsRelease,
 	resolveTools as defaultResolveTools,
+	managedBinDir,
+	mpvInstallHint,
 	type Tools,
 } from "../lib/tools.ts";
-import { checkYtDlpUpdate as defaultCheckYtDlpUpdate, ytDlpVersion as defaultYtDlpVersion } from "../lib/update-check.ts";
+import {
+	checkYtDlpUpdate as defaultCheckYtDlpUpdate,
+	ytDlpVersion as defaultYtDlpVersion,
+} from "../lib/update-check.ts";
 import * as youtube from "../lib/youtube-source.ts";
 
 // /yt is a command, never an agent tool: account data stays out of the model's context.
@@ -102,8 +105,14 @@ const CLEAR_FAILED: Notice = {
 	hint: "Check ~/.config/pi-yt permissions.",
 };
 /** What a source or verify call that threw instead of answering shows. */
-const SOURCE_FAILED: youtube.Failure = { ok: false, error: { kind: "network", message: "Could not load from YouTube.", hint: "Try again." } };
-const INSTALL_FAILED = { ok: false as const, error: { kind: "install", message: "Could not install yt-dlp.", hint: "Try again." } };
+const SOURCE_FAILED: youtube.Failure = {
+	ok: false,
+	error: { kind: "network", message: "Could not load from YouTube.", hint: "Try again." },
+};
+const INSTALL_FAILED = {
+	ok: false as const,
+	error: { kind: "install", message: "Could not install yt-dlp.", hint: "Try again." },
+};
 
 /** One loaded list for the Pi session: titles and ids only, never cookies. */
 type CachedList = { tracks: youtube.Track[]; hasMore: boolean } | { playlists: youtube.Playlist[] };
@@ -119,12 +128,20 @@ function cacheKey(account: Account | null, request: LoadRequest): string | null 
 	return `${accountKey(account)}|${request.kind === "playlist" ? `playlist:${request.id}` : request.kind}`;
 }
 
-const copyTrack = ({ id, title, artist, duration, url }: youtube.Track): youtube.Track => ({ id, title, artist, duration, url });
+const copyTrack = ({ id, title, artist, duration, url }: youtube.Track): youtube.Track => ({
+	id,
+	title,
+	artist,
+	duration,
+	url,
+});
 
 function toNotice(error: unknown): Notice {
 	const e = error as { message?: unknown; hint?: unknown; kind?: unknown } | null;
 	if (!e || typeof e.message !== "string" || typeof e.hint !== "string") return PLAYBACK_FAILED;
-	return typeof e.kind === "string" ? { message: e.message, hint: e.hint, kind: e.kind } : { message: e.message, hint: e.hint };
+	return typeof e.kind === "string"
+		? { message: e.message, hint: e.hint, kind: e.kind }
+		: { message: e.message, hint: e.hint };
 }
 
 const toDeps = (tools: Tools): Deps => ({ mpv: tools.mpv !== null, ytDlp: tools.ytDlp?.source ?? null });
@@ -206,10 +223,25 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				// Same browser spec as mpv's ytdl hook, read at resolve time so Disconnect applies at once.
 				// The link is handed over once it plays: a fresh one answers 403 for about 2 s.
 				resolver: (track, { signal }) =>
-					resolveAudio(track, { account, cookieArg: currentCookieArg(), ytDlpPath: ytDlpPath(), signal, probe: probeStream, cooldowns, now }),
+					resolveAudio(track, {
+						account,
+						cookieArg: currentCookieArg(),
+						ytDlpPath: ytDlpPath(),
+						signal,
+						probe: probeStream,
+						cooldowns,
+						now,
+					}),
 			}));
 
-		function popover(home: string, init: Parameters<typeof initPopover>[0], tui: HostTui, theme: HostTheme, keys: HostKeybindings, done: () => void) {
+		function popover(
+			home: string,
+			init: Parameters<typeof initPopover>[0],
+			tui: HostTui,
+			theme: HostTheme,
+			keys: HostKeybindings,
+			done: () => void,
+		) {
 			const p = getPlayer();
 			const view = viewTheme(theme);
 			const location = { home };
@@ -256,7 +288,12 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			};
 
 			/** Run a call for the popover; one that throws answers `failed`, so its screen shows the error. */
-			const request = <T>(id: number, call: (signal: AbortSignal) => Promise<T>, onResult: (result: T) => Action, failed: T) => {
+			const request = <T>(
+				id: number,
+				call: (signal: AbortSignal) => Promise<T>,
+				onResult: (result: T) => Action,
+				failed: T,
+			) => {
 				const controller = new AbortController();
 				controllers.set(id, controller);
 				new Promise<T>((resolve) => resolve(call(controller.signal)))
@@ -327,7 +364,11 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							const start = req.kind === "search" ? 1 : (req.start ?? 1);
 							const hit = key && start === 1 && !(req.kind !== "search" && req.refresh) ? cache.get(key) : undefined;
 							if (hit && "tracks" in hit) {
-								cached.push({ type: "loaded", id: effect.id, result: { ok: true, tracks: hit.tracks, hasMore: hit.hasMore } });
+								cached.push({
+									type: "loaded",
+									id: effect.id,
+									result: { ok: true, tracks: hit.tracks, hasMore: hit.hasMore },
+								});
 								break;
 							}
 							request(
@@ -359,7 +400,9 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 								(signal) => source.listPlaylists({ account, signal, ytDlpPath: ytDlpPath() }),
 								(result) => {
 									if (result.ok && gen === cacheGen)
-										cache.set(key, { playlists: result.playlists.map(({ id, title, count }) => ({ id, title, count })) });
+										cache.set(key, {
+											playlists: result.playlists.map(({ id, title, count }) => ({ id, title, count })),
+										});
 									return { type: "playlistsLoaded", id: effect.id, result };
 								},
 								SOURCE_FAILED,
@@ -399,9 +442,19 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							const ytDlp = tools.ytDlp;
 							const update = ytDlp
 								? updateYtDlp({ path: ytDlp.path, source: ytDlp.source })
-								: Promise.resolve({ ok: false as const, error: { kind: "missing", message: "yt-dlp not found", hint: "Install yt-dlp from /yt." } });
+								: Promise.resolve({
+										ok: false as const,
+										error: { kind: "missing", message: "yt-dlp not found", hint: "Install yt-dlp from /yt." },
+									});
 							update
-								.catch(() => ({ ok: false as const, error: { kind: "update", message: "Could not update yt-dlp.", hint: "Check your connection and retry." } }))
+								.catch(() => ({
+									ok: false as const,
+									error: {
+										kind: "update",
+										message: "Could not update yt-dlp.",
+										hint: "Check your connection and retry.",
+									},
+								}))
 								.then((result) => dispatch({ type: "updated", id: effect.id, result }));
 							break;
 						}
@@ -451,7 +504,10 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 					}
 				}
 				// One microtask later, so a cached list never renders before Pi has mounted the popover.
-				if (cached.length) queueMicrotask(() => { for (const action of cached) dispatch(action); });
+				if (cached.length)
+					queueMicrotask(() => {
+						for (const action of cached) dispatch(action);
+					});
 				if (playback.length === 0) return;
 				// One link per key press, so a failed play does not also report the shuffle after it.
 				// A new pick starts at once (the player cancels the old pick's resolve) and the old press stops there.
@@ -496,7 +552,13 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			// S23: a newer yt-dlp for the managed copy, asked in the background; a system copy is the package manager's.
 			const ytDlp = tools.ytDlp;
 			if (!offerDone && ytDlp?.source === "managed" && state.screen !== "dependencies") {
-				void checkYtDlpUpdate({ home, env, fetch: deps.fetch ?? globalThis.fetch, now, currentVersion: () => managedVersion(ytDlp.path) })
+				void checkYtDlpUpdate({
+					home,
+					env,
+					fetch: deps.fetch ?? globalThis.fetch,
+					now,
+					currentVersion: () => managedVersion(ytDlp.path),
+				})
 					.then((found) => {
 						if (found && !offerDone) dispatch({ type: "updateAvailable", latest: found.latest });
 					})
@@ -546,7 +608,8 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			return {
 				render(width: number): string[] {
 					const rows = tui.terminal?.rows ?? 30;
-					if (rendered && rendered.width === width && rendered.rows === rows && rendered.hover === hover) return rendered.lines;
+					if (rendered && rendered.width === width && rendered.rows === rows && rendered.hover === hover)
+						return rendered.lines;
 					const height = Math.max(10, Math.floor(rows * 0.85));
 					const out = renderFrame(state, { width, height, theme: view, scroll, hover });
 					rendered = { width, rows, hover, lines: out.lines };
@@ -571,7 +634,9 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			const asset = releaseAsset({ platform, arch });
 			const osRelease = platform === "linux" ? await readOsRelease().catch(() => null) : null;
 			return {
-				ytDlp: asset ? { version: YT_DLP.version, size: asset.size ?? null, dir: tildePath(managedBinDir({ home, env }), home) } : null,
+				ytDlp: asset
+					? { version: YT_DLP.version, size: asset.size ?? null, dir: tildePath(managedBinDir({ home, env }), home) }
+					: null,
 				mpv: mpvInstallHint({ platform, osRelease }),
 			};
 		}
@@ -593,7 +658,14 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			const init = { account, anonymous, browsers, deps: found, setup, player: null };
 			await ctx.ui.custom<void>(
 				(tui, theme, keybindings, done) =>
-					popover(home, init, tui as HostTui, theme as unknown as HostTheme, keybindings as unknown as HostKeybindings, done),
+					popover(
+						home,
+						init,
+						tui as HostTui,
+						theme as unknown as HostTheme,
+						keybindings as unknown as HostKeybindings,
+						done,
+					),
 				{ overlay: true, overlayOptions: { ...OVERLAY } },
 			);
 		}

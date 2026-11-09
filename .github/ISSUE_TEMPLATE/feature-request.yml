@@ -1,0 +1,57 @@
+name: Feature request
+description: Suggest a new capability or improvement for pi-yt
+title: "[Feature] "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve pi-yt. Describe the problem before proposing an implementation.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Popover
+        - Player
+        - Account and browsers
+        - Install and dependencies
+        - Status line / sidebar
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the current limitation, who it affects, and the use case it prevents or complicates.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired observable behavior and the conditions that would make the request complete.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to solve it, or workarounds you use today.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, examples, links, or other relevant information.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and did not find an equivalent request.
+          required: true

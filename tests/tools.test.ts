@@ -1,11 +1,18 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { copyToClipboard, jsRuntimeArgs, managedBinDir, mpvInstallHint, resolveTools, MPV_FALLBACK } from "../lib/tools.ts";
+import { PassThrough } from "node:stream";
+import { test } from "node:test";
+import {
+	copyToClipboard,
+	jsRuntimeArgs,
+	MPV_FALLBACK,
+	managedBinDir,
+	mpvInstallHint,
+	resolveTools,
+} from "../lib/tools.ts";
 
 async function scratch() {
 	const root = await mkdtemp(path.join(os.tmpdir(), "gsyt-tools-"));
@@ -82,15 +89,24 @@ test("S17 jsRuntimeArgs points yt-dlp at Pi's node", () => {
 // S17(3): the package-manager command for the detected system.
 test("S17 mpvInstallHint picks the package manager from os-release, or the fallback text", () => {
 	const linux = (osRelease: string) => mpvInstallHint({ platform: "linux", osRelease });
-	assert.deepEqual(linux('NAME="Arch Linux"\nID=arch\n'), { command: "sudo pacman -S mpv", text: "sudo pacman -S mpv" });
+	assert.deepEqual(linux('NAME="Arch Linux"\nID=arch\n'), {
+		command: "sudo pacman -S mpv",
+		text: "sudo pacman -S mpv",
+	});
 	assert.equal(linux("ID=endeavouros\nID_LIKE=arch\n").command, "sudo pacman -S mpv");
 	assert.equal(linux('ID=ubuntu\nID_LIKE="debian"\n').command, "sudo apt install mpv");
 	assert.equal(linux("ID=debian\n").command, "sudo apt install mpv");
-	assert.equal(linux('ID=fedora\n').command, "sudo dnf install mpv");
+	assert.equal(linux("ID=fedora\n").command, "sudo dnf install mpv");
 	assert.equal(linux('ID="rocky"\nID_LIKE="rhel centos fedora"\n').command, "sudo dnf install mpv");
 	assert.equal(linux('ID="opensuse-tumbleweed"\nID_LIKE="opensuse suse"\n').command, "sudo zypper install mpv");
-	assert.deepEqual(mpvInstallHint({ platform: "darwin", osRelease: null }), { command: "brew install mpv", text: "brew install mpv" });
-	assert.deepEqual(linux("ID=gentoo\n"), { command: null, text: "Install mpv with your package manager: https://mpv.io/installation/" });
+	assert.deepEqual(mpvInstallHint({ platform: "darwin", osRelease: null }), {
+		command: "brew install mpv",
+		text: "brew install mpv",
+	});
+	assert.deepEqual(linux("ID=gentoo\n"), {
+		command: null,
+		text: "Install mpv with your package manager: https://mpv.io/installation/",
+	});
 	assert.deepEqual(mpvInstallHint({ platform: "linux", osRelease: null }), { command: null, text: MPV_FALLBACK });
 	assert.deepEqual(mpvInstallHint({ platform: "win32", osRelease: null }), { command: null, text: MPV_FALLBACK });
 });
@@ -120,7 +136,9 @@ test("S17 copyToClipboard uses the first clipboard tool on PATH, or reports none
 		await s.exe(bin, "xclip");
 		const fake = fakeSpawn();
 		assert.equal(await copyToClipboard("sudo pacman -S mpv", { env: { PATH: bin }, spawn: fake.spawn }), true);
-		assert.deepEqual(fake.calls, [{ cmd: path.join(bin, "xclip"), args: ["-selection", "clipboard"], input: "sudo pacman -S mpv" }]);
+		assert.deepEqual(fake.calls, [
+			{ cmd: path.join(bin, "xclip"), args: ["-selection", "clipboard"], input: "sudo pacman -S mpv" },
+		]);
 
 		await s.exe(bin, "wl-copy");
 		const wl = fakeSpawn();
@@ -176,7 +194,10 @@ test("copyToClipboard tries the next clipboard tool when one fails", async () =>
 test("S17 relative XDG_DATA_HOME and relative PATH entries are ignored", async (t) => {
 	const home = await mkdtemp(path.join(os.tmpdir(), "gsyt-rel-"));
 	t.after(() => rm(home, { recursive: true, force: true }));
-	assert.equal(managedBinDir({ home, env: { XDG_DATA_HOME: "rel/data" } }), path.join(home, ".local", "share", "pi-yt", "bin"));
+	assert.equal(
+		managedBinDir({ home, env: { XDG_DATA_HOME: "rel/data" } }),
+		path.join(home, ".local", "share", "pi-yt", "bin"),
+	);
 	const cwd = process.cwd();
 	await writeFile(path.join(home, "yt-dlp"), "#!/bin/sh\n");
 	await chmod(path.join(home, "yt-dlp"), 0o755);
@@ -192,7 +213,10 @@ test("S17 relative XDG_DATA_HOME and relative PATH entries are ignored", async (
 // S17 (verify): os-release values only pick from fixed commands.
 test("S17 mpvInstallHint ignores injected IDs and follows ID_LIKE", () => {
 	assert.equal(mpvInstallHint({ platform: "linux", osRelease: 'ID="arch;touch /tmp/pwn"\n' }).command, null);
-	assert.equal(mpvInstallHint({ platform: "linux", osRelease: 'ID=linuxmint\nID_LIKE="ubuntu debian"\n' }).command, "sudo apt install mpv");
+	assert.equal(
+		mpvInstallHint({ platform: "linux", osRelease: 'ID=linuxmint\nID_LIKE="ubuntu debian"\n' }).command,
+		"sudo apt install mpv",
+	);
 });
 
 // S24: the managed copy now lives in pi-yt/bin.

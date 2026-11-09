@@ -1,7 +1,7 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { test } from "node:test";
 import { blockedRecently, probeStream, resolveAudio, STRATEGY_COOLDOWN_MS } from "../lib/resolver.ts";
 import type { SpawnFn } from "../lib/youtube-source.ts";
 
@@ -54,7 +54,15 @@ const STREAM = "https://rr1---sn-abc.googlevideo.com/videoplayback?expire=1&itag
 // S17(2): Pi's node solves YouTube's JS challenge.
 const JS = ["--js-runtimes", `node:${process.execPath}`];
 // S21: the strategy table, in order: the visionos client, then the full resolve.
-const FAST = ["-f", "bestaudio/best", "-g", "--no-warnings", ...JS, "--extractor-args", "youtube:player_client=visionos;skip=hls"];
+const FAST = [
+	"-f",
+	"bestaudio/best",
+	"-g",
+	"--no-warnings",
+	...JS,
+	"--extractor-args",
+	"youtube:player_client=visionos;skip=hls",
+];
 const SLOW = ["-f", "bestaudio/best", "-g", "--no-warnings", ...JS];
 const SECRET = "ERROR: [youtube] abc123: Login required; cookie SID=supersecret";
 
@@ -77,8 +85,24 @@ test("S17 resolveAudio runs the given ytDlpPath with --js-runtimes node:<execPat
 	const ytDlpPath = "/h/.local/share/pi-yt/bin/yt-dlp";
 	assert.deepEqual(await resolveAudio(TRACK, { spawn: fake.spawn, ytDlpPath }), { ok: true, url: STREAM });
 	assert.deepEqual(fake.calls, [
-		{ cmd: ytDlpPath, args: ["-f", "bestaudio/best", "-g", "--no-warnings", "--js-runtimes", `node:${process.execPath}`, "--extractor-args", "youtube:player_client=visionos;skip=hls", TRACK.url] },
-		{ cmd: ytDlpPath, args: ["-f", "bestaudio/best", "-g", "--no-warnings", "--js-runtimes", `node:${process.execPath}`, TRACK.url] },
+		{
+			cmd: ytDlpPath,
+			args: [
+				"-f",
+				"bestaudio/best",
+				"-g",
+				"--no-warnings",
+				"--js-runtimes",
+				`node:${process.execPath}`,
+				"--extractor-args",
+				"youtube:player_client=visionos;skip=hls",
+				TRACK.url,
+			],
+		},
+		{
+			cmd: ytDlpPath,
+			args: ["-f", "bestaudio/best", "-g", "--no-warnings", "--js-runtimes", `node:${process.execPath}`, TRACK.url],
+		},
 	]);
 });
 
@@ -147,14 +171,24 @@ test("S15 abort kills the child and does not retry", async () => {
 // S4/S8: stderr can carry cookie names; it is classified, never copied into the message or hint.
 test("S4/S8 stderr never reaches the message; sign-in, network and missing yt-dlp are classified", async () => {
 	const account = { browser: "firefox" as const, profile: "default-release" };
-	const signin = await resolveAudio(TRACK, { spawn: fakeSpawn({ code: 1, stderr: SECRET }).spawn, account, cookieArg: "firefox:default-release" });
+	const signin = await resolveAudio(TRACK, {
+		spawn: fakeSpawn({ code: 1, stderr: SECRET }).spawn,
+		account,
+		cookieArg: "firefox:default-release",
+	});
 	assert.deepEqual(signin, {
 		ok: false,
-		error: { kind: "signin", message: "YouTube session not found in Firefox.", hint: "Sign in at youtube.com in Firefox, then retry." },
+		error: {
+			kind: "signin",
+			message: "YouTube session not found in Firefox.",
+			hint: "Sign in at youtube.com in Firefox, then retry.",
+		},
 	});
 	assert.ok(!JSON.stringify(signin).includes("supersecret"));
 
-	const network = await resolveAudio(TRACK, { spawn: fakeSpawn({ code: 1, stderr: "ERROR: Unable to download webpage: timed out" }).spawn });
+	const network = await resolveAudio(TRACK, {
+		spawn: fakeSpawn({ code: 1, stderr: "ERROR: Unable to download webpage: timed out" }).spawn,
+	});
 	assert.deepEqual(network, {
 		ok: false,
 		error: { kind: "network", message: "Could not reach YouTube.", hint: "Check your connection and retry." },
@@ -164,7 +198,11 @@ test("S4/S8 stderr never reaches the message; sign-in, network and missing yt-dl
 	const missing = fakeSpawn({ error: enoent });
 	assert.deepEqual(await resolveAudio(TRACK, { spawn: missing.spawn }), {
 		ok: false,
-		error: { kind: "missing", message: "yt-dlp not found", hint: "Install it: sudo pacman -S yt-dlp (or pipx install yt-dlp)" },
+		error: {
+			kind: "missing",
+			message: "yt-dlp not found",
+			hint: "Install it: sudo pacman -S yt-dlp (or pipx install yt-dlp)",
+		},
 	});
 	assert.equal(missing.calls.length, 1);
 });
@@ -183,7 +221,10 @@ test("S15 a track id starting with '-' stays inside the single URL argument", as
 	const id = "-o/tmp/x --exec rm";
 	const track = { ...TRACK, id, url: `https://www.youtube.com/watch?v=${id}` };
 	const fake = fakeSpawn({ stdout: `${STREAM}\n` });
-	assert.deepEqual(await resolveAudio(track, { spawn: fake.spawn, cookieArg: "firefox:default-release" }), { ok: true, url: STREAM });
+	assert.deepEqual(await resolveAudio(track, { spawn: fake.spawn, cookieArg: "firefox:default-release" }), {
+		ok: true,
+		url: STREAM,
+	});
 	assert.deepEqual(fake.calls[0].args, [...FAST, track.url]);
 	assert.ok(!fake.calls[0].args.some((arg) => arg.startsWith("-o") || arg === "--exec"));
 });
@@ -219,8 +260,14 @@ test("S15 non-https outputs are rejected", async () => {
 test("S4 a secret in stderr never appears in the error on either try", async () => {
 	const account = { browser: "firefox" as const, profile: "default-release" };
 	for (const scripts of [
-		[{ code: 1, stderr: SECRET }, { code: 1, stderr: "ERROR: unable to extract" }],
-		[{ code: 1, stderr: "ERROR: unable to extract" }, { code: 1, stderr: SECRET }],
+		[
+			{ code: 1, stderr: SECRET },
+			{ code: 1, stderr: "ERROR: unable to extract" },
+		],
+		[
+			{ code: 1, stderr: "ERROR: unable to extract" },
+			{ code: 1, stderr: SECRET },
+		],
 		[{ code: 1, stderr: SECRET }],
 	]) {
 		const fake = fakeSpawn(...scripts);
@@ -290,7 +337,11 @@ test("S16 the readiness wait gives the link to mpv after readyTimeoutMs or on an
 	assert.deepEqual(late, { ok: true, url: STREAM });
 	assert.ok(slow >= 2, `probed ${slow} times`);
 
-	for (const probe of [async () => 200, async () => 404, async (): Promise<number> => Promise.reject(new Error("offline"))]) {
+	for (const probe of [
+		async () => 200,
+		async () => 404,
+		async (): Promise<number> => Promise.reject(new Error("offline")),
+	]) {
 		let calls = 0;
 		const result = await resolveAudio(TRACK, {
 			spawn: fakeSpawn({ stdout: `${STREAM}\n` }).spawn,
@@ -398,12 +449,18 @@ const VIDEO = [
 // S21(2): the player_skip=webpage try is gone; no run, whatever fails, passes it.
 test("S21 no yt-dlp run ever passes player_skip=webpage", async () => {
 	const cooldowns = new Map<string, number>();
-	for (const scripts of [[ok], [fails("ERROR: something"), ok], [fails(BLOCKED[0])], [fails(VIDEO[0]), fails(VIDEO[0])]]) {
+	for (const scripts of [
+		[ok],
+		[fails("ERROR: something"), ok],
+		[fails(BLOCKED[0])],
+		[fails(VIDEO[0]), fails(VIDEO[0])],
+	]) {
 		for (const cookieArg of [undefined, "firefox:default-release"]) {
 			const fake = fakeSpawn(...scripts);
 			await resolveAudio(TRACK, { spawn: fake.spawn, cookieArg, cooldowns });
 			assert.ok(fake.calls.length > 0);
-			for (const call of fake.calls) assert.ok(!call.args.some((arg) => arg.includes("player_skip")), call.args.join(" "));
+			for (const call of fake.calls)
+				assert.ok(!call.args.some((arg) => arg.includes("player_skip")), call.args.join(" "));
 		}
 	}
 });
@@ -414,7 +471,14 @@ test("S21 a video failure on visionos runs the full resolve and visionos stays o
 		const cooldowns = new Map<string, number>();
 		const fake = fakeSpawn(fails(stderr), ok, ok);
 		assert.deepEqual(await resolveAudio(TRACK, { spawn: fake.spawn, cooldowns }), { ok: true, url: STREAM }, stderr);
-		assert.deepEqual(fake.calls.map((c) => c.args), [[...FAST, TRACK.url], [...SLOW, TRACK.url]], stderr);
+		assert.deepEqual(
+			fake.calls.map((c) => c.args),
+			[
+				[...FAST, TRACK.url],
+				[...SLOW, TRACK.url],
+			],
+			stderr,
+		);
 		await resolveAudio({ ...TRACK, url: "https://www.youtube.com/watch?v=next" }, { spawn: fake.spawn, cooldowns });
 		assert.equal(fake.calls.length, 3, stderr);
 		assert.ok(usesVisionos(fake.calls[2].args), stderr);
@@ -430,14 +494,29 @@ test("S21 a blocked visionos runs the full resolve and later tracks skip visiono
 		const fake = fakeSpawn(fails(stderr), ok);
 		const opts = { spawn: fake.spawn, cooldowns, now: () => clock };
 		assert.deepEqual(await resolveAudio(TRACK, opts), { ok: true, url: STREAM }, stderr);
-		assert.deepEqual(fake.calls.map((c) => c.args), [[...FAST, TRACK.url], [...SLOW, TRACK.url]], stderr);
-		assert.equal(blockedRecently(cooldowns, undefined, () => clock), true, stderr);
+		assert.deepEqual(
+			fake.calls.map((c) => c.args),
+			[
+				[...FAST, TRACK.url],
+				[...SLOW, TRACK.url],
+			],
+			stderr,
+		);
+		assert.equal(
+			blockedRecently(cooldowns, undefined, () => clock),
+			true,
+			stderr,
+		);
 
 		const other = { ...TRACK, url: "https://www.youtube.com/watch?v=other" };
 		clock += STRATEGY_COOLDOWN_MS - 1;
 		const during = fakeSpawn(ok);
 		assert.deepEqual(await resolveAudio(other, { ...opts, spawn: during.spawn }), { ok: true, url: STREAM });
-		assert.deepEqual(during.calls.map((c) => c.args), [[...SLOW, other.url]], stderr);
+		assert.deepEqual(
+			during.calls.map((c) => c.args),
+			[[...SLOW, other.url]],
+			stderr,
+		);
 
 		// Another account has its own cooldown.
 		const signed = fakeSpawn(ok);
@@ -445,10 +524,18 @@ test("S21 a blocked visionos runs the full resolve and later tracks skip visiono
 		assert.ok(usesVisionos(signed.calls[0].args), stderr);
 
 		clock += 1;
-		assert.equal(blockedRecently(cooldowns, undefined, () => clock), false, stderr);
+		assert.equal(
+			blockedRecently(cooldowns, undefined, () => clock),
+			false,
+			stderr,
+		);
 		const after = fakeSpawn(ok);
 		await resolveAudio(other, { ...opts, spawn: after.spawn });
-		assert.deepEqual(after.calls.map((c) => c.args), [[...FAST, other.url]], stderr);
+		assert.deepEqual(
+			after.calls.map((c) => c.args),
+			[[...FAST, other.url]],
+			stderr,
+		);
 	}
 });
 
@@ -461,19 +548,37 @@ test("S21 a blocked full resolve is still tried next time and is reported as a r
 	assert.equal(blockedRecently(cooldowns, undefined), true);
 	const again = fakeSpawn(fails(BLOCKED[0]));
 	await resolveAudio(TRACK, { spawn: again.spawn, cooldowns });
-	assert.deepEqual(again.calls.map((c) => c.args), [[...SLOW, TRACK.url]]);
+	assert.deepEqual(
+		again.calls.map((c) => c.args),
+		[[...SLOW, TRACK.url]],
+	);
 });
 
 // S21/S4/S8: when every strategy fails the result is the classified error, never stderr.
 test("S21 every strategy failing returns the existing error without stderr", async () => {
 	const account = { browser: "firefox" as const, profile: "default-release" };
 	const cases: [Script[], unknown][] = [
-		[[fails("ERROR: unable to extract; SID=supersecret")], { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry." }],
-		[[fails(VIDEO[0]), fails(`${SECRET} not a bot`)], { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." }],
+		[
+			[fails("ERROR: unable to extract; SID=supersecret")],
+			{
+				kind: "extract",
+				message: "yt-dlp could not read YouTube.",
+				hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry.",
+			},
+		],
+		[
+			[fails(VIDEO[0]), fails(`${SECRET} not a bot`)],
+			{ kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." },
+		],
 	];
 	for (const [scripts, error] of cases) {
 		const fake = fakeSpawn(...scripts);
-		const result = await resolveAudio(TRACK, { spawn: fake.spawn, account, cookieArg: "firefox:default-release", cooldowns: new Map() });
+		const result = await resolveAudio(TRACK, {
+			spawn: fake.spawn,
+			account,
+			cookieArg: "firefox:default-release",
+			cooldowns: new Map(),
+		});
 		assert.deepEqual(result, { ok: false, error });
 		assert.equal(fake.calls.length, 2);
 		assert.ok(!JSON.stringify(result).includes("supersecret"));
@@ -499,7 +604,20 @@ test("S21 abort during visionos or the full resolve stops without another strate
 test("S21 three visionos video failures in a row on different tracks turn visionos off; a success resets the count", async () => {
 	const cooldowns = new Map<string, number>();
 	const t = (id: string) => ({ ...TRACK, url: `https://www.youtube.com/watch?v=${id}` });
-	const fake = fakeSpawn(fails(VIDEO[0]), ok, fails(VIDEO[0]), ok, ok, fails(VIDEO[0]), ok, fails(VIDEO[0]), ok, fails(VIDEO[0]), ok, ok);
+	const fake = fakeSpawn(
+		fails(VIDEO[0]),
+		ok,
+		fails(VIDEO[0]),
+		ok,
+		ok,
+		fails(VIDEO[0]),
+		ok,
+		fails(VIDEO[0]),
+		ok,
+		fails(VIDEO[0]),
+		ok,
+		ok,
+	);
 	const opts = { spawn: fake.spawn, cooldowns };
 	await resolveAudio(t("a"), opts); // visionos video-fail, full ok
 	await resolveAudio(t("b"), opts); // visionos video-fail, full ok
@@ -531,7 +649,13 @@ test("S21 three 'other' visionos failures in a row turn visionos off", async () 
 // S21 (verify A1/A2): rate limiting counts as a block; "This video is unavailable" as a video failure.
 test("S21 rate-limited stderr is blocked and 'This video is unavailable' is a video failure", async () => {
 	const limited = new Map<string, number>();
-	await resolveAudio(TRACK, { spawn: fakeSpawn({ code: 1, stderr: "ERROR: This content isn't available, try again later. Your account has been rate-limited" }, ok).spawn, cooldowns: limited });
+	await resolveAudio(TRACK, {
+		spawn: fakeSpawn(
+			{ code: 1, stderr: "ERROR: This content isn't available, try again later. Your account has been rate-limited" },
+			ok,
+		).spawn,
+		cooldowns: limited,
+	});
 	assert.equal(blockedRecently(limited, undefined), true);
 	const unavailable = new Map<string, number>();
 	const t = (id: string) => ({ ...TRACK, url: `https://www.youtube.com/watch?v=${id}` });
@@ -546,11 +670,19 @@ test("S21 rate-limited stderr is blocked and 'This video is unavailable' is a vi
 // S11 (#25): a bot check or rate limit on the last strategy is reported as a block, not as a missing session or network.
 test("S11 a block on every strategy is reported as a block, with or without an account", async () => {
 	const account = { browser: "firefox" as const, profile: "default-release" };
-	const BLOCK = { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." };
+	const BLOCK = {
+		kind: "network",
+		message: "YouTube is limiting requests right now.",
+		hint: "Wait a few minutes, then retry.",
+	};
 	for (const stderr of [BLOCKED[0], BLOCKED[2]]) {
 		for (const signedIn of [{ account, cookieArg: "firefox:default-release" }, {}]) {
 			const fake = fakeSpawn(fails(stderr));
-			assert.deepEqual(await resolveAudio(TRACK, { spawn: fake.spawn, ...signedIn }), { ok: false, error: BLOCK }, stderr);
+			assert.deepEqual(
+				await resolveAudio(TRACK, { spawn: fake.spawn, ...signedIn }),
+				{ ok: false, error: BLOCK },
+				stderr,
+			);
 			assert.equal(fake.calls.length, 2);
 		}
 	}
@@ -558,7 +690,11 @@ test("S11 a block on every strategy is reported as a block, with or without an a
 	const login = fakeSpawn(fails(SECRET));
 	assert.deepEqual(await resolveAudio(TRACK, { spawn: login.spawn, account, cookieArg: "firefox:default-release" }), {
 		ok: false,
-		error: { kind: "signin", message: "YouTube session not found in Firefox.", hint: "Sign in at youtube.com in Firefox, then retry." },
+		error: {
+			kind: "signin",
+			message: "YouTube session not found in Firefox.",
+			hint: "Sign in at youtube.com in Firefox, then retry.",
+		},
 	});
 });
 
@@ -577,15 +713,22 @@ test("S10 cancelled and missing visionos runs never turn visionos off", async ()
 	assert.equal(blockedRecently(cancelled, undefined), false);
 	const next = fakeSpawn(ok);
 	await resolveAudio(t("d"), { spawn: next.spawn, cooldowns: cancelled });
-	assert.deepEqual(next.calls.map((c) => c.args), [[...FAST, t("d").url]]);
+	assert.deepEqual(
+		next.calls.map((c) => c.args),
+		[[...FAST, t("d").url]],
+	);
 
 	const missing = new Map<string, number>();
 	const enoent = Object.assign(new Error("spawn yt-dlp ENOENT"), { code: "ENOENT" });
-	for (const id of ["a", "b", "c"]) await resolveAudio(t(id), { spawn: fakeSpawn({ error: enoent }).spawn, cooldowns: missing });
+	for (const id of ["a", "b", "c"])
+		await resolveAudio(t(id), { spawn: fakeSpawn({ error: enoent }).spawn, cooldowns: missing });
 	assert.equal(blockedRecently(missing, undefined), false);
 	const found = fakeSpawn(ok);
 	await resolveAudio(t("d"), { spawn: found.spawn, cooldowns: missing });
-	assert.deepEqual(found.calls.map((c) => c.args), [[...FAST, t("d").url]]);
+	assert.deepEqual(
+		found.calls.map((c) => c.args),
+		[[...FAST, t("d").url]],
+	);
 });
 
 // S10 (#25): the full resolve has no fallback, so its failures never start a cooldown of their own.
@@ -600,10 +743,16 @@ test("S10 failures of the full resolve never count as a block", async () => {
 		clock += 1000;
 		const fake = fakeSpawn(fails("ERROR: something odd"));
 		await resolveAudio(t(id), { ...opts, spawn: fake.spawn });
-		assert.deepEqual(fake.calls.map((c) => c.args), [[...SLOW, t(id).url]]);
+		assert.deepEqual(
+			fake.calls.map((c) => c.args),
+			[[...SLOW, t(id).url]],
+		);
 	}
 	clock = 1_000_000 + STRATEGY_COOLDOWN_MS;
-	assert.equal(blockedRecently(cooldowns, undefined, () => clock), false);
+	assert.equal(
+		blockedRecently(cooldowns, undefined, () => clock),
+		false,
+	);
 });
 
 // S12 (#25): a block already turned the strategy off, so the failures before it start over once the cooldown ends.
@@ -614,10 +763,16 @@ test("S12 a block resets the failure streak", async () => {
 	const fake = fakeSpawn(fails(VIDEO[0]), ok, fails(VIDEO[0]), ok, fails(BLOCKED[0]), ok, fails(VIDEO[0]), ok, ok);
 	const opts = { spawn: fake.spawn, cooldowns, now: () => clock };
 	for (const id of ["a", "b", "c"]) await resolveAudio(t(id), opts); // two video failures, then a block
-	assert.equal(blockedRecently(cooldowns, undefined, () => clock), true);
+	assert.equal(
+		blockedRecently(cooldowns, undefined, () => clock),
+		true,
+	);
 	clock += STRATEGY_COOLDOWN_MS;
 	await resolveAudio(t("d"), opts); // one video failure after the cooldown
-	assert.equal(blockedRecently(cooldowns, undefined, () => clock), false);
+	assert.equal(
+		blockedRecently(cooldowns, undefined, () => clock),
+		false,
+	);
 	await resolveAudio(t("e"), opts);
 	assert.ok(usesVisionos(fake.calls.at(-1)!.args));
 	assert.equal(fake.calls.length, 9);

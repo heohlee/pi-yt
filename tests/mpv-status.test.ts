@@ -1,9 +1,9 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { test } from "node:test";
 import { resolveSocketPath, startMpvStatus } from "../lib/mpv-status.ts";
 
 type Timer = { id: number; at: number; fn: () => void };
@@ -200,7 +200,10 @@ test("S7 elapsed ticks publish at most once every 5 seconds", async () => {
 		// Handled in order: once 86.3 is seen, 85.7 was handled without publishing.
 		await tick(11000, 86.3);
 		await waitFor(() => calls.length === before + 2, "next second");
-		assert.deepEqual(calls.slice(before), ["♪ Aruarian Dance · Nujabes · 1:25/4:12", "♪ Aruarian Dance · Nujabes · 1:26/4:12"]);
+		assert.deepEqual(calls.slice(before), [
+			"♪ Aruarian Dance · Nujabes · 1:25/4:12",
+			"♪ Aruarian Dance · Nujabes · 1:26/4:12",
+		]);
 	} finally {
 		await teardown();
 	}

@@ -1,18 +1,18 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { chmod, mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { PassThrough } from "node:stream";
+import { test } from "node:test";
 import {
 	checkDeps,
 	listPlaylist,
 	listPlaylists,
 	listSource,
+	type SpawnFn,
 	search,
 	verifySession,
-	type SpawnFn,
 } from "../lib/youtube-source.ts";
 
 type Script = { stdout?: string; stderr?: string; code?: number; error?: NodeJS.ErrnoException; hang?: boolean };
@@ -123,7 +123,14 @@ test("S17 every yt-dlp call passes --js-runtimes node:<execPath> and the given y
 	await verifySession(firefox, { spawn: fake.spawn, ytDlpPath });
 	assert.deepEqual(
 		fake.calls.map((c) => [c.cmd, ...c.args.slice(0, 5)]),
-		Array.from({ length: 3 }, () => [ytDlpPath, "--flat-playlist", "-J", "--no-warnings", "--js-runtimes", `node:${process.execPath}`]),
+		Array.from({ length: 3 }, () => [
+			ytDlpPath,
+			"--flat-playlist",
+			"-J",
+			"--no-warnings",
+			"--js-runtimes",
+			`node:${process.execPath}`,
+		]),
 	);
 });
 
@@ -161,7 +168,15 @@ test("listPlaylist reads one playlist by id", async () => {
 test("S14 listSource liked asks yt-dlp for entries 1-50", async () => {
 	const fake = fakeSpawn({ stdout: ENTRIES });
 	await listSource("liked", { account: firefox, spawn: fake.spawn });
-	assert.deepEqual(fake.calls[0].args, [...BASE, ...COOKIES, "--playlist-start", "1", "--playlist-end", "50", ":ytfav"]);
+	assert.deepEqual(fake.calls[0].args, [
+		...BASE,
+		...COOKIES,
+		"--playlist-start",
+		"1",
+		"--playlist-end",
+		"50",
+		":ytfav",
+	]);
 });
 
 test("S14 start 51 asks for entries 51-100 for sources and playlists", async () => {
@@ -180,7 +195,11 @@ test("S14 hasMore is true for a full page and false below it", async () => {
 	assert.equal(full.ok && full.tracks.length, 50);
 	assert.equal(full.ok && full.hasMore, true);
 	assert.equal(short.ok && short.hasMore, false);
-	const small = await listPlaylist("PL1", { account: firefox, spawn: fakeSpawn({ stdout: entries(2) }).spawn, pageSize: 2 });
+	const small = await listPlaylist("PL1", {
+		account: firefox,
+		spawn: fakeSpawn({ stdout: entries(2) }).spawn,
+		pageSize: 2,
+	});
 	assert.equal(small.ok && small.hasMore, true);
 });
 
@@ -392,7 +411,10 @@ test("checkDeps ignores relative PATH entries and finds the managed yt-dlp", asy
 	await mkdir(managed, { recursive: true });
 	await writeFile(path.join(managed, "yt-dlp"), "#!/bin/sh\n");
 	await chmod(path.join(managed, "yt-dlp"), 0o755);
-	assert.deepEqual(await checkDeps({ home: root, env: { XDG_DATA_HOME: path.join(root, "data") } }), { mpv: false, ytDlp: true });
+	assert.deepEqual(await checkDeps({ home: root, env: { XDG_DATA_HOME: path.join(root, "data") } }), {
+		mpv: false,
+		ytDlp: true,
+	});
 });
 
 const zen = { browser: "zen" as const, profile: "/h/.zen/a.Default (release)" };
@@ -403,8 +425,20 @@ test("zen and helium accounts pass firefox:/chromium: profile paths to yt-dlp", 
 	const fake = fakeSpawn({ stdout: ENTRIES });
 	await listSource("liked", { account: zen, spawn: fake.spawn });
 	await listSource("liked", { account: helium, spawn: fake.spawn });
-	assert.deepEqual(fake.calls[0].args, [...BASE, "--cookies-from-browser", "firefox:/h/.zen/a.Default (release)", ...PAGE_1, ":ytfav"]);
-	assert.deepEqual(fake.calls[1].args, [...BASE, "--cookies-from-browser", "chromium:/h/.config/net.imput.helium/Default", ...PAGE_1, ":ytfav"]);
+	assert.deepEqual(fake.calls[0].args, [
+		...BASE,
+		"--cookies-from-browser",
+		"firefox:/h/.zen/a.Default (release)",
+		...PAGE_1,
+		":ytfav",
+	]);
+	assert.deepEqual(fake.calls[1].args, [
+		...BASE,
+		"--cookies-from-browser",
+		"chromium:/h/.config/net.imput.helium/Default",
+		...PAGE_1,
+		":ytfav",
+	]);
 });
 
 // S13/S8: sign-in errors name Zen and Helium.
@@ -413,14 +447,20 @@ test("sign-in stderr names Zen and Helium", async () => {
 		[zen, "Zen"],
 		[helium, "Helium"],
 	] as const) {
-		const result = await listSource("liked", { account, spawn: fakeSpawn({ stderr: "ERROR: login required\n", code: 1 }).spawn });
+		const result = await listSource("liked", {
+			account,
+			spawn: fakeSpawn({ stderr: "ERROR: login required\n", code: 1 }).spawn,
+		});
 		assert.deepEqual(result, {
 			ok: false,
 			error: {
 				kind: "signin",
 				message: `YouTube session not found in ${label}.`,
 				// yt-dlp -J hides Helium's decrypt warnings, so its sign-in hint also names the keyring.
-				hint: label === "Helium" ? "Sign in at youtube.com in Helium, or unlock your system keyring, then retry." : `Sign in at youtube.com in ${label}, then retry.`,
+				hint:
+					label === "Helium"
+						? "Sign in at youtube.com in Helium, or unlock your system keyring, then retry."
+						: `Sign in at youtube.com in ${label}, then retry.`,
 				detail: "ERROR: login required",
 			},
 		});
@@ -457,7 +497,12 @@ test("S22 lists skip Mixes, playlists and channels; hasMore counts the raw page"
 	const stdout = JSON.stringify({
 		entries: [
 			{ id: "vid0000000a", ie_key: "Youtube", title: "Song A", channel: "Artist" },
-			{ id: "RDvid0000000a", ie_key: "YoutubeTab", title: "Mix - Song A", url: "https://www.youtube.com/watch?v=vid0000000a&list=RDvid0000000a" },
+			{
+				id: "RDvid0000000a",
+				ie_key: "YoutubeTab",
+				title: "Mix - Song A",
+				url: "https://www.youtube.com/watch?v=vid0000000a&list=RDvid0000000a",
+			},
 			{ id: "PLabc", _type: "playlist", title: "A playlist" },
 			{ id: "UCxyz", ie_key: "YoutubeTab", title: "A channel", url: "https://www.youtube.com/channel/UCxyz" },
 			{ id: "vid0000000b", title: "Song B" },
@@ -474,7 +519,10 @@ test("S22 lists skip Mixes, playlists and channels; hasMore counts the raw page"
 // Advisory S16: hasMore follows the raw page, even when some entries are unusable (null or without an id).
 test("hasMore counts unusable entries in a full page", async () => {
 	const entries = [null, { title: "no id" }, ...Array.from({ length: 48 }, (_, i) => ({ id: `v${i}` }))];
-	const result = await listSource("liked", { account: firefox, spawn: fakeSpawn({ stdout: JSON.stringify({ entries }) }).spawn });
+	const result = await listSource("liked", {
+		account: firefox,
+		spawn: fakeSpawn({ stdout: JSON.stringify({ entries }) }).spawn,
+	});
 	assert.equal(result.ok && result.tracks.length, 48);
 	assert.equal(result.ok && result.hasMore, true);
 });

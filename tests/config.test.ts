@@ -1,8 +1,8 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { test } from "node:test";
 import { configPath, readConfig, writeConfig } from "../lib/config.ts";
 
 async function fakeHome(t: { after: (fn: () => Promise<void>) => void }) {
@@ -93,7 +93,11 @@ test("a tampered profile reads as no account and is flagged", async (t) => {
 		{ browser: "helium", profile: "Default" },
 	]) {
 		await writeFile(file, JSON.stringify({ version: 1, account }));
-		assert.deepEqual(await readConfig({ home, env: {} }), { version: 1, account: null, malformed: true }, JSON.stringify(account));
+		assert.deepEqual(
+			await readConfig({ home, env: {} }),
+			{ version: 1, account: null, malformed: true },
+			JSON.stringify(account),
+		);
 	}
 	for (const account of [
 		{ browser: "chromium", profile: "Profile 1" },

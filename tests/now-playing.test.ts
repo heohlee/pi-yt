@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { formatNowPlaying, formatTime, sanitize } from "../lib/now-playing.ts";
 
 const base = { title: "Aruarian Dance", artist: "Nujabes", elapsed: 80, duration: 252 };
@@ -24,8 +24,14 @@ test("S4 needs sign-in line", () => {
 test("S5 missing artist, duration and title", () => {
 	assert.equal(formatNowPlaying({ status: "playing", ...base, artist: undefined }), "♪ Aruarian Dance · 1:20/4:12");
 	assert.equal(formatNowPlaying({ status: "playing", ...base, artist: "  " }), "♪ Aruarian Dance · 1:20/4:12");
-	assert.equal(formatNowPlaying({ status: "playing", ...base, duration: undefined }), "♪ Aruarian Dance · Nujabes · 1:20");
-	assert.equal(formatNowPlaying({ status: "playing", ...base, duration: Number.NaN }), "♪ Aruarian Dance · Nujabes · 1:20");
+	assert.equal(
+		formatNowPlaying({ status: "playing", ...base, duration: undefined }),
+		"♪ Aruarian Dance · Nujabes · 1:20",
+	);
+	assert.equal(
+		formatNowPlaying({ status: "playing", ...base, duration: Number.NaN }),
+		"♪ Aruarian Dance · Nujabes · 1:20",
+	);
 	assert.equal(formatNowPlaying({ status: "playing", ...base, title: undefined }), "♪ YouTube · Nujabes · 1:20/4:12");
 	assert.equal(formatNowPlaying({ status: "playing", ...base, title: "" }), "♪ YouTube · Nujabes · 1:20/4:12");
 });
@@ -40,7 +46,10 @@ test("S5 time formatting", () => {
 	assert.equal(formatTime(-12), "0:00");
 	assert.equal(formatTime(Number.NaN), "0:00");
 	assert.equal(formatNowPlaying({ status: "playing", ...base, elapsed: -3 }), "♪ Aruarian Dance · Nujabes · 0:00/4:12");
-	assert.equal(formatNowPlaying({ status: "playing", ...base, elapsed: Number.NaN }), "♪ Aruarian Dance · Nujabes · 0:00/4:12");
+	assert.equal(
+		formatNowPlaying({ status: "playing", ...base, elapsed: Number.NaN }),
+		"♪ Aruarian Dance · Nujabes · 0:00/4:12",
+	);
 });
 
 test("S6 title and artist are sanitized", () => {

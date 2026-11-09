@@ -1,8 +1,8 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { test } from "node:test";
 import { BROWSER_IDS, browserLabel, cookieArg, detectBrowsers, isBrowserId } from "../lib/browsers.ts";
 
 async function fakeHome(t: { after: (fn: () => Promise<void>) => void }) {
@@ -66,8 +66,18 @@ test("firefox profiles.ini prefers the Install default over Default=1", async (t
 		["abcd.default", "wxyz.default-release"],
 	);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
-		{ id: "firefox", label: "Firefox", profileName: "default-release", profile: path.join(home, ".mozilla", "firefox", "wxyz.default-release") },
-		{ id: "firefox", label: "Firefox", profileName: "default", profile: path.join(home, ".mozilla", "firefox", "abcd.default") },
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "default-release",
+			profile: path.join(home, ".mozilla", "firefox", "wxyz.default-release"),
+		},
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "default",
+			profile: path.join(home, ".mozilla", "firefox", "abcd.default"),
+		},
 	]);
 });
 
@@ -80,7 +90,12 @@ test("firefox profiles.ini falls back to Default=1", async (t) => {
 		["a.work", "b.personal"],
 	);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
-		{ id: "firefox", label: "Firefox", profileName: "personal", profile: path.join(home, ".mozilla", "firefox", "b.personal") },
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "personal",
+			profile: path.join(home, ".mozilla", "firefox", "b.personal"),
+		},
 		{ id: "firefox", label: "Firefox", profileName: "work", profile: path.join(home, ".mozilla", "firefox", "a.work") },
 	]);
 });
@@ -88,12 +103,19 @@ test("firefox profiles.ini falls back to Default=1", async (t) => {
 // S3: chromium-family browsers are detected by their Default profile directory, in fixed order.
 test("chromium, chrome and brave are detected by the Default directory", async (t) => {
 	const home = await fakeHome(t);
-	await writeProfilesIni(home, "[Profile0]\nName=default-release\nPath=x.default-release\nDefault=1\n", ["x.default-release"]);
+	await writeProfilesIni(home, "[Profile0]\nName=default-release\nPath=x.default-release\nDefault=1\n", [
+		"x.default-release",
+	]);
 	await mkdir(path.join(home, ".config", "BraveSoftware", "Brave-Browser", "Default"), { recursive: true });
 	await mkdir(path.join(home, ".config", "chromium", "Default"), { recursive: true });
 	await mkdir(path.join(home, ".config", "google-chrome", "Default"), { recursive: true });
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
-		{ id: "firefox", label: "Firefox", profileName: "default-release", profile: path.join(home, ".mozilla", "firefox", "x.default-release") },
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "default-release",
+			profile: path.join(home, ".mozilla", "firefox", "x.default-release"),
+		},
 		{ id: "chromium", label: "Chromium", profileName: "Default", profile: "Default" },
 		{ id: "chrome", label: "Chrome", profileName: "Default", profile: "Default" },
 		{ id: "brave", label: "Brave", profileName: "Default", profile: "Default" },
@@ -125,7 +147,12 @@ test("firefox profile is the folder yt-dlp reads, relative or absolute", async (
 		["abcd1234.default-release", elsewhere],
 	);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
-		{ id: "firefox", label: "Firefox", profileName: "default-release", profile: path.join(home, ".mozilla", "firefox", "abcd1234.default-release") },
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "default-release",
+			profile: path.join(home, ".mozilla", "firefox", "abcd1234.default-release"),
+		},
 		{ id: "firefox", label: "Firefox", profileName: "elsewhere", profile: elsewhere },
 	]);
 });
@@ -135,7 +162,10 @@ test("firefox profiles under the XDG config dir are detected", async (t) => {
 	const home = await fakeHome(t);
 	const dir = path.join(home, "cfg", "mozilla", "firefox");
 	await mkdir(dir, { recursive: true });
-	await writeFile(path.join(dir, "profiles.ini"), "[Profile0]\nName=default-release\nIsRelative=1\nPath=q.default-release\nDefault=1\n");
+	await writeFile(
+		path.join(dir, "profiles.ini"),
+		"[Profile0]\nName=default-release\nIsRelative=1\nPath=q.default-release\nDefault=1\n",
+	);
 	await openedProfile(path.join(dir, "q.default-release"));
 	assert.deepEqual(await detectBrowsers({ home, env: { XDG_CONFIG_HOME: path.join(home, "cfg") } }), [
 		{ id: "firefox", label: "Firefox", profileName: "default-release", profile: path.join(dir, "q.default-release") },
@@ -145,11 +175,11 @@ test("firefox profiles under the XDG config dir are detected", async (t) => {
 // S4 (verify F1): a profile yt-dlp or mpv would split (",", "::") is not offered.
 test("firefox profiles with a comma or :: are skipped", async (t) => {
 	const home = await fakeHome(t);
-	await writeProfilesIni(home, "[Profile0]\nName=bad\nIsRelative=1\nPath=a,exec=x\n\n[Profile1]\nName=bad2\nIsRelative=1\nPath=b::c\n\n[Profile2]\nName=ok\nIsRelative=1\nPath=c.ok\n", [
-		"a,exec=x",
-		"b::c",
-		"c.ok",
-	]);
+	await writeProfilesIni(
+		home,
+		"[Profile0]\nName=bad\nIsRelative=1\nPath=a,exec=x\n\n[Profile1]\nName=bad2\nIsRelative=1\nPath=b::c\n\n[Profile2]\nName=ok\nIsRelative=1\nPath=c.ok\n",
+		["a,exec=x", "b::c", "c.ok"],
+	);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "firefox", label: "Firefox", profileName: "ok", profile: path.join(home, ".mozilla", "firefox", "c.ok") },
 	]);
@@ -165,7 +195,12 @@ test("firefox profiles without prefs.js are hidden", async (t) => {
 	);
 	await mkdir(path.join(home, ".mozilla", "firefox", "d.default"), { recursive: true });
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
-		{ id: "firefox", label: "Firefox", profileName: "default-release", profile: path.join(home, ".mozilla", "firefox", "r.default-release") },
+		{
+			id: "firefox",
+			label: "Firefox",
+			profileName: "default-release",
+			profile: path.join(home, ".mozilla", "firefox", "r.default-release"),
+		},
 	]);
 });
 
@@ -179,7 +214,12 @@ test("chromium profiles come from Local State in natural order, skipping missing
 		"Profile 1": { name: "Work" },
 		"Profile 3": { name: "Gone" },
 	};
-	await writeLocalState(home, "google-chrome", { profile: { info_cache } }, ["Default", "Profile 1", "Profile 2", "Profile 10"]);
+	await writeLocalState(home, "google-chrome", { profile: { info_cache } }, [
+		"Default",
+		"Profile 1",
+		"Profile 2",
+		"Profile 10",
+	]);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "chrome", label: "Chrome", profileName: "Personal", profile: "Default" },
 		{ id: "chrome", label: "Chrome", profileName: "Work", profile: "Profile 1" },
@@ -197,7 +237,12 @@ test("chromium profile names are sanitized and capped", async (t) => {
 		"Profile 2": { name: 42 },
 		"Profile 3": {},
 	};
-	await writeLocalState(home, "chromium", { profile: { info_cache } }, ["Default", "Profile 1", "Profile 2", "Profile 3"]);
+	await writeLocalState(home, "chromium", { profile: { info_cache } }, [
+		"Default",
+		"Profile 1",
+		"Profile 2",
+		"Profile 3",
+	]);
 	assert.deepEqual(
 		(await detectBrowsers({ home, env: {} })).map((b) => b.profileName),
 		["Wo[31mrk", "x".repeat(40), "Profile 2", "Profile 3"],
@@ -212,7 +257,12 @@ test("Local State account fields never appear in the detected browsers", async (
 		profile: {
 			last_used: "secret-last-used",
 			info_cache: {
-				Default: { name: "Personal", user_name: "secret@example.com", gaia_name: "Secret Person", gaia_id: "secret-id" },
+				Default: {
+					name: "Personal",
+					user_name: "secret@example.com",
+					gaia_name: "Secret Person",
+					gaia_id: "secret-id",
+				},
 			},
 		},
 	};
@@ -251,7 +301,9 @@ test("chromium profile folders with a comma or :: are skipped", async (t) => {
 test("chromium falls back to Default when info_cache lists no usable profile", async (t) => {
 	const home = await fakeHome(t);
 	await writeLocalState(home, "chromium", { profile: { info_cache: {} } }, ["Default"]);
-	await writeLocalState(home, "google-chrome", { profile: { info_cache: { "Profile 9": { name: "Gone" } } } }, ["Default"]);
+	await writeLocalState(home, "google-chrome", { profile: { info_cache: { "Profile 9": { name: "Gone" } } } }, [
+		"Default",
+	]);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "chromium", label: "Chromium", profileName: "Default", profile: "Default" },
 		{ id: "chrome", label: "Chrome", profileName: "Default", profile: "Default" },
@@ -261,7 +313,13 @@ test("chromium falls back to Default when info_cache lists no usable profile", a
 // S4 (verify follow-up): folder names yt-dlp would mis-parse ("", ":x", surrounding spaces) are never offered.
 test("chromium folders that yt-dlp would mis-parse are skipped", async (t) => {
 	const home = await fakeHome(t);
-	const info = { "": { name: "Empty" }, ":x": { name: "Colon" }, " lead": { name: "Lead" }, "trail ": { name: "Trail" }, "Profile 1": { name: "Ok" } };
+	const info = {
+		"": { name: "Empty" },
+		":x": { name: "Colon" },
+		" lead": { name: "Lead" },
+		"trail ": { name: "Trail" },
+		"Profile 1": { name: "Ok" },
+	};
 	await writeLocalState(home, "chromium", { profile: { info_cache: info } }, [":x", " lead", "trail ", "Profile 1"]);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "chromium", label: "Chromium", profileName: "Ok", profile: "Profile 1" },
@@ -314,7 +372,12 @@ test("zen profiles come from XDG config and both Flatpak roots", async (t) => {
 test("helium profiles come from Local State with absolute folders", async (t) => {
 	const home = await fakeHome(t);
 	const root = path.join(home, ".config", "net.imput.helium");
-	const info_cache = { "Profile 2": { name: "Two" }, Default: { name: "Personal" }, "Profile 1": {}, "Profile 3": { name: "Gone" } };
+	const info_cache = {
+		"Profile 2": { name: "Two" },
+		Default: { name: "Personal" },
+		"Profile 1": {},
+		"Profile 3": { name: "Gone" },
+	};
 	await writeLocalState(home, "net.imput.helium", { profile: { info_cache } }, ["Default", "Profile 1", "Profile 2"]);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "helium", label: "Helium", profileName: "Personal", profile: path.join(root, "Default") },
@@ -368,8 +431,14 @@ test("helium profiles under a config dir with a comma are skipped", async (t) =>
 	const cfg = path.join(home, "a,b");
 	const root = path.join(cfg, "net.imput.helium");
 	await mkdir(path.join(root, "Default"), { recursive: true });
-	await writeFile(path.join(root, "Local State"), JSON.stringify({ profile: { info_cache: { Default: { name: "You" } } } }));
-	assert.deepEqual((await detectBrowsers({ home, env: { XDG_CONFIG_HOME: cfg } })).filter((b) => b.id === "helium"), []);
+	await writeFile(
+		path.join(root, "Local State"),
+		JSON.stringify({ profile: { info_cache: { Default: { name: "You" } } } }),
+	);
+	assert.deepEqual(
+		(await detectBrowsers({ home, env: { XDG_CONFIG_HOME: cfg } })).filter((b) => b.id === "helium"),
+		[],
+	);
 });
 
 // Advisory S18: Firefox profile names are sanitized and capped like Chromium's; an empty name falls back to the folder.
@@ -389,10 +458,11 @@ test("firefox profile names are sanitized and capped", async (t) => {
 // Advisory S13: detection offers only profiles that a saved config would accept.
 test("firefox profiles with a relative non-plain folder are skipped", async (t) => {
 	const home = await fakeHome(t);
-	await writeProfilesIni(home, "[Profile0]\nName=out\nIsRelative=0\nPath=../outside\n\n[Profile1]\nName=ok\nIsRelative=1\nPath=c.ok\n", [
-		"../outside",
-		"c.ok",
-	]);
+	await writeProfilesIni(
+		home,
+		"[Profile0]\nName=out\nIsRelative=0\nPath=../outside\n\n[Profile1]\nName=ok\nIsRelative=1\nPath=c.ok\n",
+		["../outside", "c.ok"],
+	);
 	assert.deepEqual(await detectBrowsers({ home, env: {} }), [
 		{ id: "firefox", label: "Firefox", profileName: "ok", profile: path.join(home, ".mozilla", "firefox", "c.ok") },
 	]);

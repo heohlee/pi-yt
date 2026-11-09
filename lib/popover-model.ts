@@ -1,6 +1,6 @@
-import { browserLabel, type Browser } from "./browsers.ts";
+import { type Browser, browserLabel } from "./browsers.ts";
 import type { Account } from "./config.ts";
-import { UNSUPPORTED, type InstallError, type InstallProgress } from "./installer.ts";
+import { type InstallError, type InstallProgress, UNSUPPORTED } from "./installer.ts";
 import type { PlayerState } from "./player.ts";
 import type {
 	Playlist,
@@ -167,7 +167,12 @@ export interface PopoverState {
 	/** Cursor in the account choice shown in the right pane, or null when closed. */
 	accountMenu: number | null;
 	playlistsOpen: boolean;
-	playlists: { status: "idle" | "loading" | "ready" | "error"; items: Playlist[]; error: SourceError | null; id: number };
+	playlists: {
+		status: "idle" | "loading" | "ready" | "error";
+		items: Playlist[];
+		error: SourceError | null;
+		id: number;
+	};
 	source: SourceRef | null;
 	list: {
 		status: "idle" | "loading" | "ready" | "error";
@@ -228,7 +233,15 @@ export interface InitResult extends Result {
 }
 
 export type LeftRow =
-	| { type: "source"; key: string; source: SourceRef; label: string; count: number | null; accountOnly: boolean; indent: boolean }
+	| {
+			type: "source";
+			key: string;
+			source: SourceRef;
+			label: string;
+			count: number | null;
+			accountOnly: boolean;
+			indent: boolean;
+	  }
 	| { type: "playlists"; key: "playlists"; label: string; count: number | null; open: boolean; accountOnly: true }
 	| { type: "account"; key: "account"; label: string; count: null; accountOnly: false }
 	| { type: "rule" }
@@ -332,7 +345,8 @@ export function leftRows(state: PopoverState): LeftRow[] {
 	});
 	if (state.playlistsOpen) {
 		if (playlists.status === "loading") rows.push({ type: "note", text: "Loading…", tone: "dim" });
-		else if (playlists.status === "error") rows.push({ type: "note", text: playlists.error?.message ?? "", tone: "error" });
+		else if (playlists.status === "error")
+			rows.push({ type: "note", text: playlists.error?.message ?? "", tone: "error" });
 		else if (playlists.status === "ready" && playlists.items.length === 0)
 			rows.push({ type: "note", text: "Nothing here.", tone: "dim" });
 		for (const p of playlists.status === "ready" ? playlists.items : []) {
@@ -350,8 +364,24 @@ export function leftRows(state: PopoverState): LeftRow[] {
 	}
 	rows.push({ type: "rule" });
 	const queued = state.player?.queue.length ?? 0;
-	rows.push({ type: "source", key: "queue", source: { kind: "queue" }, label: "Queue", count: queued || null, accountOnly: false, indent: false });
-	rows.push({ type: "source", key: "search", source: { kind: "search" }, label: "Search…", count: null, accountOnly: false, indent: false });
+	rows.push({
+		type: "source",
+		key: "queue",
+		source: { kind: "queue" },
+		label: "Queue",
+		count: queued || null,
+		accountOnly: false,
+		indent: false,
+	});
+	rows.push({
+		type: "source",
+		key: "search",
+		source: { kind: "search" },
+		label: "Search…",
+		count: null,
+		accountOnly: false,
+		indent: false,
+	});
 	rows.push({ type: "rule" });
 	rows.push({ type: "account", key: "account", label: accountLabel(state), count: null, accountOnly: false });
 	return rows;
@@ -379,7 +409,12 @@ function rightCount(state: PopoverState): number {
 
 /** Whether the right pane ends with the Load more row; search results are a single page. */
 export function hasLoadMore(state: PopoverState): boolean {
-	return state.list.status === "ready" && state.list.hasMore && state.list.tracks.length > 0 && state.source?.kind !== "search";
+	return (
+		state.list.status === "ready" &&
+		state.list.hasMore &&
+		state.list.tracks.length > 0 &&
+		state.source?.kind !== "search"
+	);
 }
 
 /** Right pane index of the Load more row, or -1. */
@@ -393,7 +428,14 @@ export function selectedTrack(state: PopoverState): number {
 	return i >= 0 && i < state.list.tracks.length ? i : -1;
 }
 
-const emptyList = (): PopoverState["list"] => ({ status: "idle", tracks: [], error: null, id: 0, hasMore: false, more: null });
+const emptyList = (): PopoverState["list"] => ({
+	status: "idle",
+	tracks: [],
+	error: null,
+	id: 0,
+	hasMore: false,
+	more: null,
+});
 const loadingList = (id: number): PopoverState["list"] => ({ ...emptyList(), status: "loading", id });
 
 export function initPopover(init: PopoverInit): InitResult {
@@ -447,7 +489,10 @@ function leaveGate(state: PopoverState): Result {
 	const base: PopoverState = { ...state, dialog: null, notice: { ...READY }, gate: { cursor: 0, snapshot: null } };
 	const out = land(base, state.gate.snapshot);
 	const restored = out.scroll.left > 0 || out.scroll.right > 0;
-	return { state: out.state, effects: restored ? [{ type: "scroll", scroll: out.scroll }, ...out.effects] : out.effects };
+	return {
+		state: out.state,
+		effects: restored ? [{ type: "scroll", scroll: out.scroll }, ...out.effects] : out.effects,
+	};
 }
 
 const sameAccount = (a: Account | null, b: Account | null) => a?.browser === b?.browser && a?.profile === b?.profile;
@@ -475,7 +520,9 @@ function restore(state: PopoverState, snapshot: PopoverSnapshot): InitResult {
 	let next = out.state;
 	effects.push(...out.effects);
 	if (snapshot.source.kind === "search") {
-		const list = snapshot.results ? { ...emptyList(), status: "ready" as const, tracks: snapshot.results } : emptyList();
+		const list = snapshot.results
+			? { ...emptyList(), status: "ready" as const, tracks: snapshot.results }
+			: emptyList();
 		next = { ...next, query: snapshot.query, list };
 	}
 	if (next.list.status === "loading") next = { ...next, restoreIndex: snapshot.rightIndex };
@@ -547,7 +594,10 @@ function loadMore(state: PopoverState): Result {
 	const request = state.source && pageRequest(state.source, { start: state.list.tracks.length + 1 });
 	if (!request || state.list.more !== null) return { state, effects: [] };
 	const id = state.nextId;
-	return { state: { ...state, nextId: id + 1, list: { ...state.list, more: id } }, effects: [{ type: "load", id, request }] };
+	return {
+		state: { ...state, nextId: id + 1, list: { ...state.list, more: id } },
+		effects: [{ type: "load", id, request }],
+	};
 }
 
 /** r: reload the current source from page 1, bypassing the session cache. */
@@ -559,7 +609,12 @@ function reload(state: PopoverState): Result {
 function loadPlaylists(state: PopoverState, refresh: boolean): Result {
 	const id = state.nextId;
 	return {
-		state: { ...state, nextId: id + 1, playlistsOpen: true, playlists: { status: "loading", items: [], error: null, id } },
+		state: {
+			...state,
+			nextId: id + 1,
+			playlistsOpen: true,
+			playlists: { status: "loading", items: [], error: null, id },
+		},
 		effects: [refresh ? { type: "loadPlaylists", id, refresh: true } : { type: "loadPlaylists", id }],
 	};
 }
@@ -593,7 +648,11 @@ function verify(state: PopoverState, target: number): Result {
 	const browser = state.browsers[target];
 	const id = state.nextId;
 	return {
-		state: { ...state, nextId: id + 1, connect: { ...state.connect, phase: "verifying", target, verifyId: id, error: null } },
+		state: {
+			...state,
+			nextId: id + 1,
+			connect: { ...state.connect, phase: "verifying", target, verifyId: id, error: null },
+		},
 		effects: [{ type: "verify", id, account: { browser: browser.id, profile: browser.profile } }],
 	};
 }
@@ -658,14 +717,20 @@ function dependenciesKey(state: PopoverState, key: Key): Result {
 
 // ---- S17: install yt-dlp, update it, and how to install mpv ----
 
-const SYSTEM_UPDATE: Notice = { message: "yt-dlp comes from your system.", hint: "Update yt-dlp with your package manager." };
+const SYSTEM_UPDATE: Notice = {
+	message: "yt-dlp comes from your system.",
+	hint: "Update yt-dlp with your package manager.",
+};
 const YTDLP_MISSING: Notice = { message: "yt-dlp not found", hint: "", action: "install" };
 
 /** Install yt-dlp: the confirmation, or straight to the reason when there is no official build. */
 function openInstall(state: PopoverState, retry: Retry | null): Result {
 	if (!state.setup?.ytDlp)
 		return {
-			state: { ...state, dialog: { type: "failed", error: { message: UNSUPPORTED.message, hint: UNSUPPORTED.hint }, cursor: 0, retry } },
+			state: {
+				...state,
+				dialog: { type: "failed", error: { message: UNSUPPORTED.message, hint: UNSUPPORTED.hint }, cursor: 0, retry },
+			},
 			effects: [],
 		};
 	return { state: { ...state, dialog: { type: "confirm", cursor: 0, retry } }, effects: [] };
@@ -687,7 +752,8 @@ function startUpdate(state: PopoverState, retry: Retry | null): Result {
 	// Unknown tools (the check failed): the update effect looks at the real copy and reports what it finds.
 	const source = state.deps ? state.deps.ytDlp : undefined;
 	if (source === "system") return { state: { ...state, notice: { ...SYSTEM_UPDATE } }, effects: [] };
-	if (source === null) return { state: { ...state, notice: { ...YTDLP_MISSING, ...(retry ? { retry } : {}) } }, effects: [] };
+	if (source === null)
+		return { state: { ...state, notice: { ...YTDLP_MISSING, ...(retry ? { retry } : {}) } }, effects: [] };
 	const id = state.nextId;
 	return { state: { ...state, nextId: id + 1, updating: { id, retry } }, effects: [{ type: "update", id }] };
 }
@@ -748,7 +814,10 @@ function dialogKey(state: PopoverState, key: Key): Result {
 			return { state, effects: command ? [{ type: "copy", text: command }] : [] };
 		}
 		case "check":
-			return { state: { ...state, dialog: { type: "mpv", cursor: dialog.cursor, checking: true } }, effects: [{ type: "checkTools" }] };
+			return {
+				state: { ...state, dialog: { type: "mpv", cursor: dialog.cursor, checking: true } },
+				effects: [{ type: "checkTools" }],
+			};
 		default:
 			return { state: close, effects: [] };
 	}
@@ -767,13 +836,17 @@ function clampGate(state: PopoverState, before: number): PopoverState {
 }
 
 function moveLeft(state: PopoverState, delta: number): PopoverState {
-	const keys = leftRows(state).filter(selectable).map((r) => r.key);
+	const keys = leftRows(state)
+		.filter(selectable)
+		.map((r) => r.key);
 	const at = Math.max(0, keys.indexOf(state.leftKey));
 	return { ...state, leftKey: keys[Math.max(0, Math.min(keys.length - 1, at + delta))] };
 }
 
 function enterLeft(state: PopoverState): Result {
-	const row = leftRows(state).filter(selectable).find((r) => r.key === state.leftKey);
+	const row = leftRows(state)
+		.filter(selectable)
+		.find((r) => r.key === state.leftKey);
 	if (!row) return { state, effects: [] };
 	if (row.type === "account") {
 		if (!hasAccount(state)) return toConnect(state);
@@ -823,7 +896,9 @@ function command(state: PopoverState, ch: string): Result {
 			return { state, effects: [{ type: "setVolume", volume: volume - VOLUME_STEP }] };
 		case ".":
 		case ",":
-			return playing(state) ? { state, effects: [{ type: "seek", seconds: ch === "." ? SEEK_STEP : -SEEK_STEP }] } : { state, effects: [] };
+			return playing(state)
+				? { state, effects: [{ type: "seek", seconds: ch === "." ? SEEK_STEP : -SEEK_STEP }] }
+				: { state, effects: [] };
 		case "/":
 			return openSource({ ...state, leftKey: "search" }, { kind: "search" }, true);
 		case "r":
@@ -931,7 +1006,8 @@ function click(state: PopoverState, target: Target, ratio: number | undefined): 
 		return offerShown(state) ? answerOffer(state, target.choice === "action") : none;
 	}
 	if (cleared.dialog) {
-		if (target.type !== "dialog" || target.index >= dialogChoices(cleared).length || cleared.dialog.type === "download") return none;
+		if (target.type !== "dialog" || target.index >= dialogChoices(cleared).length || cleared.dialog.type === "download")
+			return none;
 		return dialogKey({ ...cleared, dialog: { ...cleared.dialog, cursor: target.index } }, "enter");
 	}
 	switch (cleared.screen) {
@@ -939,7 +1015,12 @@ function click(state: PopoverState, target: Target, ratio: number | undefined): 
 			if (target.type !== "dependency" || target.index >= dependencyOptions(cleared).length) return none;
 			return dependenciesKey({ ...cleared, gate: { ...cleared.gate, cursor: target.index } }, "enter");
 		case "connect":
-			if (target.type !== "connect" || cleared.connect.phase === "verifying" || target.index >= connectOptions(cleared).length) return none;
+			if (
+				target.type !== "connect" ||
+				cleared.connect.phase === "verifying" ||
+				target.index >= connectOptions(cleared).length
+			)
+				return none;
 			return connectKey({ ...cleared, connect: { ...cleared.connect, cursor: target.index } }, "enter");
 	}
 	switch (target.type) {
@@ -1006,7 +1087,11 @@ function answerOffer(state: PopoverState, update: boolean): Result {
 function offerKey(state: PopoverState, key: Key): boolean | null {
 	if (typeof key !== "object" || (key.text !== "u" && key.text !== "l") || !offerShown(state)) return null;
 	const input =
-		state.screen === "main" && state.focus === "right" && state.accountMenu === null && state.source?.kind === "search" && state.rightIndex === 0;
+		state.screen === "main" &&
+		state.focus === "right" &&
+		state.accountMenu === null &&
+		state.source?.kind === "search" &&
+		state.rightIndex === 0;
 	return input ? null : key.text === "u";
 }
 
@@ -1049,16 +1134,31 @@ function step(state: PopoverState, action: Action): Result {
 			if (!page && (state.list.status !== "loading" || action.id !== state.list.id)) return { state, effects: [] };
 			if (!result.ok) {
 				if (page)
-					return { state: { ...state, list: { ...state.list, more: null }, notice: errorNotice(result.error, "more") }, effects: [] };
+					return {
+						state: { ...state, list: { ...state.list, more: null }, notice: errorNotice(result.error, "more") },
+						effects: [],
+					};
 				const notice = offersAction(result.error) ? errorNotice(result.error, "list") : state.notice;
 				return {
-					state: { ...state, notice, restoreIndex: null, list: { ...state.list, status: "error", error: result.error } },
+					state: {
+						...state,
+						notice,
+						restoreIndex: null,
+						list: { ...state.list, status: "error", error: result.error },
+					},
 					effects: [],
 				};
 			}
 			const tracks = page ? [...state.list.tracks, ...result.tracks] : result.tracks;
-			const counts = state.source.kind === "search" ? state.counts : { ...state.counts, [sourceKey(state.source)]: tracks.length };
-			const list: PopoverState["list"] = { ...state.list, status: "ready", tracks, hasMore: result.hasMore ?? false, more: null };
+			const counts =
+				state.source.kind === "search" ? state.counts : { ...state.counts, [sourceKey(state.source)]: tracks.length };
+			const list: PopoverState["list"] = {
+				...state.list,
+				status: "ready",
+				tracks,
+				hasMore: result.hasMore ?? false,
+				more: null,
+			};
 			const next: PopoverState = { ...state, counts, list, restoreIndex: null };
 			const rightIndex = page ? state.rightIndex : clampRight(next, state.restoreIndex ?? 0);
 			return { state: { ...next, rightIndex }, effects: [] };
@@ -1086,7 +1186,8 @@ function step(state: PopoverState, action: Action): Result {
 		case "playerError": {
 			const { kind, message, hint } = action.error;
 			// The player's `missing` is mpv; an extraction failure is yt-dlp's.
-			const extra: Partial<Notice> = kind === "missing" ? { action: "mpv" } : kind === "extract" ? { action: "update" } : {};
+			const extra: Partial<Notice> =
+				kind === "missing" ? { action: "mpv" } : kind === "extract" ? { action: "update" } : {};
 			return { state: { ...state, notice: { message, hint, ...extra } }, effects: [] };
 		}
 		case "installProgress": {
@@ -1107,7 +1208,11 @@ function step(state: PopoverState, action: Action): Result {
 				const error = { message: result.error.message, hint: result.error.hint };
 				return { state: { ...state, dialog: { type: "failed", error, cursor: 0, retry: dialog.retry } }, effects: [] };
 			}
-			const done: PopoverState = { ...state, dialog: null, notice: { message: "✓ yt-dlp installed", hint: "", tone: "success" } };
+			const done: PopoverState = {
+				...state,
+				dialog: null,
+				notice: { message: "✓ yt-dlp installed", hint: "", tone: "success" },
+			};
 			const again = runRetry(done, dialog.retry);
 			return { state: again.state, effects: [{ type: "checkTools" }, ...again.effects] };
 		}
@@ -1116,7 +1221,8 @@ function step(state: PopoverState, action: Action): Result {
 			const { retry } = state.updating;
 			const { result } = action;
 			const base: PopoverState = { ...state, updating: null };
-			if (!result.ok) return { state: { ...base, notice: { message: result.error.message, hint: result.error.hint } }, effects: [] };
+			if (!result.ok)
+				return { state: { ...base, notice: { message: result.error.message, hint: result.error.hint } }, effects: [] };
 			return runRetry({ ...base, notice: { message: "yt-dlp is up to date.", hint: "", tone: "success" } }, retry);
 		}
 		case "deps": {
@@ -1126,7 +1232,11 @@ function step(state: PopoverState, action: Action): Result {
 			if (dialog?.type === "mpv" && dialog.checking) {
 				next = action.deps.mpv
 					? { ...next, dialog: null, notice: { message: "✓ mpv found", hint: "", tone: "success" } }
-					: { ...next, dialog: { ...dialog, checking: false }, notice: { message: "mpv still not found.", hint: "Install it, then check again." } };
+					: {
+							...next,
+							dialog: { ...dialog, checking: false },
+							notice: { message: "mpv still not found.", hint: "Install it, then check again." },
+						};
 			}
 			if (next.screen === "dependencies") {
 				if (!missingTool(action.deps)) return leaveGate(next);

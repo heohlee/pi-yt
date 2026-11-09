@@ -1,6 +1,6 @@
-import path from "node:path";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn as nodeSpawn } from "node:child_process";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { SpawnFn } from "./youtube-source.ts";
 
 // Is there a newer yt-dlp for the managed copy (S23)? Asks GitHub at most once a day,
@@ -82,7 +82,10 @@ async function readState(file: string): Promise<UpdateState | null> {
 	try {
 		const data = JSON.parse(await readFile(file, "utf8")) as Partial<UpdateState>;
 		if (typeof data.checkedAt !== "number" || !Number.isFinite(data.checkedAt)) return null;
-		return { checkedAt: data.checkedAt, latest: typeof data.latest === "string" && VERSION.test(data.latest) ? data.latest : null };
+		return {
+			checkedAt: data.checkedAt,
+			latest: typeof data.latest === "string" && VERSION.test(data.latest) ? data.latest : null,
+		};
 	} catch {
 		return null;
 	}

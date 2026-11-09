@@ -470,7 +470,9 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 			return undefined;
 		}
 		if (!Array.isArray(list)) return undefined;
-		const theirs = list.map((entry) => (entry && typeof entry === "object" ? (entry as { id?: unknown }).id : undefined));
+		const theirs = list.map((entry) =>
+			entry && typeof entry === "object" ? (entry as { id?: unknown }).id : undefined,
+		);
 		if (list.length !== ids.length || theirs.some((id, j) => id !== ids[j])) {
 			// None of ours left: someone else owns mpv now, so stop preparing links for it.
 			if (!theirs.some((id) => typeof id === "number" && ids.includes(id))) foreign = true;
@@ -680,7 +682,9 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 					foreign = false;
 					shuffle = false;
 					for (const [i, t] of tracks.entries())
-						ids.push(entryIdOf(await send(["loadfile", t.url, i === 0 ? "replace" : "append", -1, titleOption(t.title)])));
+						ids.push(
+							entryIdOf(await send(["loadfile", t.url, i === 0 ? "replace" : "append", -1, titleOption(t.title)])),
+						);
 					if (startIndex > 0) await run(["playlist-play-index", startIndex]);
 				});
 				emit();

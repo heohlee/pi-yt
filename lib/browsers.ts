@@ -1,5 +1,5 @@
-import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 
 // Detection only checks that profile directories exist, parses Firefox's
 // profiles.ini and takes each profile's display name from Chromium's
@@ -84,10 +84,19 @@ function safeProfile(profile: string): boolean {
 
 // yt-dlp trims spaces around ":" and reads a leading ":" as part of "::", so those names would point elsewhere.
 function plainFolder(folder: string): boolean {
-	return safeProfile(folder) && folder !== "." && folder !== ".." && !folder.includes("/") && folder.trim() === folder && folder !== "" && !folder.startsWith(":");
+	return (
+		safeProfile(folder) &&
+		folder !== "." &&
+		folder !== ".." &&
+		!folder.includes("/") &&
+		folder.trim() === folder &&
+		folder !== "" &&
+		!folder.startsWith(":")
+	);
 }
 
-const absoluteFolder = (folder: string) => safeProfile(folder) && path.isAbsolute(folder) && path.normalize(folder) === folder;
+const absoluteFolder = (folder: string) =>
+	safeProfile(folder) && path.isAbsolute(folder) && path.normalize(folder) === folder;
 
 /**
  * Whether `profile` has a shape detection can offer for `browser`: a plain Chromium profile name, an absolute
@@ -121,8 +130,7 @@ async function firefoxProfiles(dir: string): Promise<{ name: string; folder: str
 	profiles = profiles.filter((_, i) => opened[i]);
 	const installDefault = sections.find((s) => /^Install/i.test(s.name) && s.values.Default)?.values.Default;
 	const preferred =
-		profiles.find((p) => installDefault !== undefined && p.path === installDefault) ??
-		profiles.find((p) => p.flagged);
+		profiles.find((p) => installDefault !== undefined && p.path === installDefault) ?? profiles.find((p) => p.flagged);
 	const ordered = preferred ? [preferred, ...profiles.filter((p) => p !== preferred)] : profiles;
 	return ordered.map((p) => ({ name: profileDisplayName(p.name, path.basename(p.folder)), folder: p.folder }));
 }
@@ -211,7 +219,12 @@ export async function detectBrowsers({
 	}));
 	// Zen 1.18.6b+ uses the XDG config dir; older installs ~/.zen; Flatpak keeps both under ~/.var.
 	const zenFlatpak = path.join(home, ".var", "app", "app.zen_browser.zen");
-	for (const dir of [path.join(configHome, "zen"), path.join(home, ".zen"), path.join(zenFlatpak, "zen"), path.join(zenFlatpak, ".zen")]) {
+	for (const dir of [
+		path.join(configHome, "zen"),
+		path.join(home, ".zen"),
+		path.join(zenFlatpak, "zen"),
+		path.join(zenFlatpak, ".zen"),
+	]) {
 		for (const { name, folder } of await firefoxProfiles(dir)) {
 			found.push({ id: "zen", label: LABELS.zen, profileName: name, profile: folder });
 		}

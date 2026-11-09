@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { resolveSocketPath, startMpvStatus, type MpvStatusHandle } from "../lib/mpv-status.ts";
+import { type MpvStatusHandle, resolveSocketPath, startMpvStatus } from "../lib/mpv-status.ts";
 
 const STATUS_KEY = "youtube";
 

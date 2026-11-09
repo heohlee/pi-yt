@@ -13,11 +13,13 @@ const SEP = " · ";
 /** Replace control characters with spaces, collapse runs of spaces, trim. */
 export function sanitize(text: string | null | undefined): string {
 	if (typeof text !== "string") return "";
-	return text
-		// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters in track titles must not reach the terminal.
-		.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
-		.replace(/ {2,}/g, " ")
-		.trim();
+	return (
+		text
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters in track titles must not reach the terminal.
+			.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+			.replace(/ {2,}/g, " ")
+			.trim()
+	);
 }
 
 function validSeconds(seconds: number | null | undefined): number | undefined {

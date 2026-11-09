@@ -35,6 +35,7 @@ pi-yt is TypeScript run natively by Node.js 24 or newer (type stripping, no buil
 
 ```sh
 npm test               # all tests/*.test.ts, with fakes for mpv, yt-dlp and fetch
+npm run coverage       # the same tests; fails below 85% line, branch or function coverage of lib/ and extensions/
 npm run typecheck      # tsc -p . (strict, no emit)
 npm run lint           # biome ci: lint and format
 npm pack --dry-run     # package contents

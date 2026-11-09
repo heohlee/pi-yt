@@ -89,7 +89,8 @@ test('workflow validates the fetched PR body and fails closed on PR API errors',
 
 test('workflow runs only trusted base code with read-only permissions', () => {
   const workflow = fs.readFileSync('.github/workflows/pr-issue.yml', 'utf8');
-  assert.match(workflow, /pull_request_target:/);
+  assert.match(workflow, /^  pull_request:$/m);
+  assert.doesNotMatch(workflow, /pull_request_target/);
   for (const event of ['opened', 'edited', 'reopened', 'synchronize', 'ready_for_review']) {
     assert.ok(workflow.includes(event));
   }

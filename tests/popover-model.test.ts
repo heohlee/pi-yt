@@ -5,8 +5,10 @@ import {
 	connectOptions,
 	dependencyOptions,
 	initPopover,
+	hasLoadMore,
 	keyFromInput,
 	leftRows,
+	loadMoreIndex,
 	reduce,
 	selectedTrack,
 	snapshotPopover,
@@ -1235,4 +1237,63 @@ test("S25 clicks on Update and Later update or dismiss the offer", () => {
 	const later = run(offered("managed"), { type: "click", target: { type: "notice", choice: "later" } });
 	assert.deepEqual(later.effects, [{ type: "dismissUpdate" }]);
 	assert.equal(later.state.offer, null);
+});
+
+// ---- Review advisories (S25-S27) ----
+
+// S25: a Load more cut off by the connect screen is asked again when esc goes back to main, never stuck on Loading more….
+test("S25 a pending Load more cancelled by the connect screen is asked again on esc back to main", () => {
+	const more = run(onLoadMore().state, ...keys("enter"));
+	const moreId = loadId(more.effects);
+	const connect = run(more.state, ...keys("left", ...Array.from({ length: 7 }, (): Key => "down"), "enter", "enter"));
+	assert.equal(connect.state.screen, "connect");
+	assert.deepEqual(connect.effects, [{ type: "cancel", id: moreId }]);
+	const back = run(connect.state, ...keys("esc"));
+	const id = loadId(back.effects);
+	assert.notEqual(id, moreId);
+	assert.deepEqual(back.effects, [{ type: "load", id, request: { kind: "recommended", start: 4 } }]);
+	assert.equal(back.state.screen, "main");
+	assert.equal(back.state.list.more, id);
+	assert.deepEqual(back.state.list.tracks, TRACKS);
+	const landed = run(back.state, { type: "loaded", id, result: { ok: true, tracks: [track(4)], hasMore: false } });
+	assert.deepEqual(landed.state.list.tracks, [...TRACKS, track(4)]);
+	assert.equal(landed.state.list.more, null);
+});
+
+// S25: esc back to main with nothing pending loads nothing.
+test("S25 esc back to main with no pending load emits no effect", () => {
+	const connect = run(onLoadMore().state, ...keys("left", ...Array.from({ length: 7 }, (): Key => "down"), "enter", "enter"));
+	assert.deepEqual(connect.effects, []);
+	const back = run(connect.state, ...keys("esc"));
+	assert.deepEqual(back.effects, []);
+	assert.equal(back.state.list.more, null);
+});
+
+// S26: with the tools unknown (the check failed), Update runs and lets the real check answer instead of saying "not found".
+test("S26 Update with unknown tools runs the update instead of saying yt-dlp is missing", () => {
+	const start = init({ account: ACCOUNT, deps: null, setup: SETUP });
+	const loaded = run(start.state, { type: "loaded", id: loadId(start.effects), result: { ok: true, tracks: TRACKS } });
+	const offer = run(loaded.state, { type: "updateAvailable", latest: "2026.11.05" }).state;
+	const out = run(offer, ...keys(u));
+	const id = idOf(out.effects, "update");
+	assert.deepEqual(out.effects, [{ type: "update", id }, { type: "dismissUpdate" }]);
+	assert.deepEqual(out.state.updating, { id, retry: null });
+	assert.equal(out.state.notice, null);
+	// A yt-dlp known to be missing still offers Install.
+	const missing = run(offered("managed"), { type: "deps", deps: { mpv: true, ytDlp: null } }, ...keys(u));
+	assert.deepEqual(missing.effects, [{ type: "dismissUpdate" }]);
+	assert.deepEqual(missing.state.notice, { message: "yt-dlp not found", hint: "", action: "install" });
+});
+
+// S27: search results are one page; a result that says hasMore never adds a Load more row the cursor cannot reach.
+test("S27 search results never offer Load more, even when the result says hasMore", () => {
+	const anon = run(init({ anonymous: true }).state, ...keys({ text: "x" }, "enter"));
+	const { state } = run(anon.state, { type: "loaded", id: loadId(anon.effects), result: { ok: true, tracks: TRACKS, hasMore: true } });
+	assert.equal(hasLoadMore(state), false);
+	assert.equal(loadMoreIndex(state), -1);
+	const last = run(state, ...keys("down", "down", "down", "down", "down"));
+	assert.equal(last.state.rightIndex, 3, "the last result is the last row");
+	assert.deepEqual(run(last.state, ...keys("enter")).effects, [{ type: "play", tracks: TRACKS, index: 2 }]);
+	// Library lists keep Load more.
+	assert.equal(hasLoadMore(onLoadMore().state), true);
 });

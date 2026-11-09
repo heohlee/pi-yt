@@ -794,3 +794,49 @@ test("S25 a transient error shows over the offer and the offer returns after the
 	const f = frame(closed, 120);
 	assert.deepEqual(f.hits.filter((h) => h.id.startsWith("notice:")).map((h) => h.id), ["notice:action", "notice:later"]);
 });
+
+// ---- Review advisories (S29, S31) ----
+
+const browsersN = (n: number) =>
+	Array.from({ length: n }, (_, i) => ({ id: "firefox" as const, label: "Firefox", profileName: `profile-${i + 1}`, profile: `p${i + 1}` }));
+
+// S29: connect, Dependencies and dialogs never grow past the height; title and footer stay, the rows between scroll to the cursor.
+test("S29 non-main screens fit the height, keeping the title, footer and cursor row with their hits", () => {
+	const connect = connectState({ browsers: browsersN(8) });
+	for (const width of WIDTHS) {
+		const top = plain(connect, width, 12);
+		assert.equal(top.length, 12, top.join("\n"));
+		assert.match(top[1], /YouTube\s+not connected/);
+		assert.match(top.at(-2)!, /enter connect · esc close/);
+		assert.match(top.at(-1)!, /^╰─+╯$/);
+		assert.ok(has(top, "▸ Firefox     profile-1"), top.join("\n"));
+		assertHits(connect, width, { "connect:0": "Firefox" }, 12);
+
+		const bottom = apply(connect, ...Array.from({ length: 8 }, () => key("down")));
+		const lines = plain(bottom, width, 12);
+		assert.equal(lines.length, 12, lines.join("\n"));
+		assert.ok(has(lines, "▸ Continue without an account"), lines.join("\n"));
+		assert.ok(!has(lines, "profile-1"), "the top rows scrolled away");
+		assert.match(lines.at(-2)!, /enter connect · esc close/);
+		assertHits(bottom, width, { "connect:8": "Continue without an account", "connect:7": "Firefox" }, 12);
+
+		const confirm = plain(confirmState(), width, 12);
+		assert.equal(confirm.length, 12, confirm.join("\n"));
+		assert.ok(has(confirm, "▸ Install"), confirm.join("\n"));
+		assert.match(confirm.at(-2)!, /enter choose · esc cancel/);
+		assertHits(confirmState(), width, { "dialog:0": "Install", "dialog:1": "Cancel" }, 12);
+	}
+	// A screen that fits is drawn as before.
+	assert.deepEqual(plain(connectState(), 100, 13), plain(connectState(), 100, 30));
+});
+
+// S31: a cut keeps the closing escapes of the text instead of a full reset, so styles around it go on.
+test("S31 truncate keeps the text's own closing escapes and never resets the styles around it", () => {
+	assert.equal(truncate("\x1b[31mabcdef\x1b[39m", 3), "\x1b[31mab…\x1b[39m");
+	assert.equal(truncate("\x1b[1m\x1b[31mabcdef\x1b[39m\x1b[22m tail", 3), "\x1b[1m\x1b[31mab…\x1b[39m\x1b[22m");
+	assert.equal(truncate("ab\x1b[31mcdef\x1b[39m", 3), "ab\x1b[31m…\x1b[39m");
+	assert.equal(truncate("abcdef", 3), "ab…");
+	const row = theme.selected(pad(theme.fg("accent", "A very long playlist title"), 10));
+	assert.equal(row, "\x1b[48;5;236m\x1b[36mA very lo…\x1b[39m\x1b[49m");
+	assert.ok(!row.includes("\x1b[0m"));
+});

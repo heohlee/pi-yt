@@ -41,20 +41,21 @@ export function visibleWidth(text: string): number {
 	return width;
 }
 
-/** Cut to at most `width` columns, ending in "…" when cut. Escape sequences are kept. */
+/**
+ * Cut to at most `width` columns, ending in "…" when cut. Escape sequences are kept, including those
+ * after the cut, so the text closes its own styles instead of resetting the ones around it.
+ */
 export function truncate(text: string, width: number): string {
 	if (width <= 0) return "";
 	if (visibleWidth(text) <= width) return text;
 	const budget = width - visibleWidth(ELLIPSIS);
 	let out = "";
 	let used = 0;
-	let styled = false;
 	let rest = text;
 	while (rest) {
 		const escape = ANSI_START.exec(rest);
 		if (escape) {
 			out += escape[0];
-			styled = true;
 			rest = rest.slice(escape[0].length);
 			continue;
 		}
@@ -63,7 +64,7 @@ export function truncate(text: string, width: number): string {
 		let consumed = 0;
 		for (const { segment } of segmenter.segment(chunk)) {
 			const w = graphemeWidth(segment);
-			if (used + w > budget) return `${out}${ELLIPSIS}${styled ? "\x1b[0m" : ""}`;
+			if (used + w > budget) return `${out}${ELLIPSIS}${rest.match(ANSI)?.join("") ?? ""}`;
 			out += segment;
 			used += w;
 			consumed += segment.length;

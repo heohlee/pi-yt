@@ -432,7 +432,8 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 		if (!job) {
 			const started = session;
 			const ctl = new AbortController();
-			const promise = resolver(track, { signal: ctl.signal })
+			// A resolver that throws instead of rejecting falls back to the ytdl hook like any failed resolve.
+			const promise = new Promise<ResolveResult>((resolve) => resolve(resolver(track, { signal: ctl.signal })))
 				.then((result) => {
 					if (!result.ok || started !== session || ctl.signal.aborted) return undefined;
 					streams.set(track.url, { url: result.url, at: now() });
@@ -742,14 +743,32 @@ export function createPlayer(deps: PlayerDeps = {}): Player {
 					// forgetStreams() ran while mpv was starting: the link belongs to the old session.
 					if (sess !== session) url = undefined;
 					if (url) entries[start] = url;
-					const reply = await send(["loadfile", url ?? first.url, "replace", -1, titleOption(first.title)]);
-					const id = entryIdOf(reply);
-					ids[start] = id;
-					if (url && id !== undefined) streamEntries.set(id, first);
-					for (let i = start + 1; i < tracks.length; i++)
-						ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "append", -1, titleOption(tracks[i].title)]));
-					for (let i = 0; i < start; i++)
-						ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "insert-at", i, titleOption(tracks[i].title)]));
+					/** Mirror entries mpv took; in mirror order they match mpv's playlist. */
+					const loaded = tracks.map(() => false);
+					try {
+						const reply = await send(["loadfile", url ?? first.url, "replace", -1, titleOption(first.title)]);
+						const id = entryIdOf(reply);
+						ids[start] = id;
+						loaded[start] = true;
+						if (url && id !== undefined) streamEntries.set(id, first);
+						for (let i = start + 1; i < tracks.length; i++) {
+							ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "append", -1, titleOption(tracks[i].title)]));
+							loaded[i] = true;
+						}
+						for (let i = 0; i < start; i++) {
+							ids[i] = entryIdOf(await send(["loadfile", tracks[i].url, "insert-at", i, titleOption(tracks[i].title)]));
+							loaded[i] = true;
+						}
+					} catch (err) {
+						// The queue lists only what mpv holds, never a track it refused or never got.
+						const kept = (_: unknown, i: number) => loaded[i];
+						queue = queue.filter(kept);
+						entries = entries.filter(kept);
+						ids = ids.filter(kept);
+						cursor = loaded[start] ? loaded.slice(0, start).filter(Boolean).length : -1;
+						layout++;
+						throw err;
+					}
 					applied = true;
 				});
 			} finally {

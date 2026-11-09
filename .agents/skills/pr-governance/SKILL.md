@@ -51,7 +51,7 @@ Do not impose an issue-number slug requirement; issue linkage belongs in the PR 
 - `.agents/skills/node-tests/SKILL.md`: test layers and local evidence
 - `.agents/skills/issue-governance/SKILL.md`: issue requirement and permitted labels
 
-The release workflow runs on `vX.Y.Z` tags, not on PRs; it is not a missing PR gate. Do not report another repository's checks as missing here. Do not call a local command run proof that remote required checks passed.
+The release workflow (`.github/workflows/release.yml`) runs on pushed `vX.Y.Z` tags, not on PRs; it is not a missing PR gate. Do not report another repository's checks as missing here. Do not call a local command run proof that remote required checks passed.
 
 ## Commit Format
 
@@ -64,7 +64,7 @@ Use Conventional Commits, such as `feat: ...`, `fix: ...`, `docs: ...` or `ci(re
 | Governing issue is absent or not linked with `Closes #<n>` | BLOCKED for PR readiness |
 | A required check fails or is pending | BLOCKED for merge |
 | Issue is linked and required checks pass | GO for readiness, not authorization to publish or merge |
-| The release job does not run on the PR | Not a missing PR gate |
+| The release workflow does not run on the PR | Not a missing PR gate |
 
 ## Output Contract
 

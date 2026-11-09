@@ -62,7 +62,13 @@ The `Security` workflow runs CodeQL (JavaScript/TypeScript) and `npm audit --aud
 1. Bump `version` in `package.json` to `X.Y.Z` through a PR.
 2. Add the approved release notes as `.github/release-notes/vX.Y.Z.md` in a PR. The release fails without that file.
 3. After merging, tag `main` with `vX.Y.Z` and push the tag.
-4. GitHub Actions publishes `pi-yt` to npm with trusted publishing and provenance, and creates the GitHub Release from the notes file.
+4. The [release workflow](.github/workflows/release.yml) checks that the tag matches `package.json` and that the notes file has text, then runs the tests, type check, lint and package contents.
+5. Publishing waits for the owner's approval in the `npm` environment. GitHub notifies the reviewer; approve it from the workflow run with **Review deployments**.
+6. The workflow publishes `pi-yt` to npm with trusted publishing and provenance, then creates the GitHub Release from the notes file.
+
+Trusted publishing needs a trusted publisher configured for the `pi-yt` package on npmjs.com: GitHub Actions, repository `heohlee/pi-yt`, workflow `release.yml` and environment `npm`. No npm token is stored in the repository.
+
+npm only lets you add a trusted publisher to a package that already exists, so the first version is published once by hand (`npm publish` with two-factor authentication, without provenance). Add the trusted publisher right after it; a new configuration expires if no publish uses it within two days, so release the next tag soon after. Then restrict token-based publishing in the package settings.
 
 ## Privacy
 

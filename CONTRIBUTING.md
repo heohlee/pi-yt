@@ -31,14 +31,16 @@ Use [Conventional Commits](https://www.conventionalcommits.org/), such as `fix: 
 
 ## Local checks
 
-pi-yt is TypeScript run natively by Node.js 24 or newer (type stripping, no build step) and has no runtime dependencies. CI runs:
+pi-yt is TypeScript run natively by Node.js 24 or newer (type stripping, no build step) and has no runtime dependencies. The tests need nothing installed; the type check and lint use the dev dependencies, so run `npm ci` once. CI runs:
 
 ```sh
-node --test tests/     # tests, with fakes for mpv, yt-dlp and fetch
-tsc --noEmit           # type check
-biome ci               # lint and format
+npm test               # node --test tests/, with fakes for mpv, yt-dlp and fetch
+npm run typecheck      # tsc -p . (strict, no emit)
+npm run lint           # biome ci: lint and format
 npm pack --dry-run     # package contents
 ```
+
+`npm run format` applies Biome's formatting.
 
 Run a single test file with `node --test tests/<name>.test.ts`.
 

@@ -110,9 +110,11 @@ type CachedList = { tracks: youtube.Track[]; hasMore: boolean } | { playlists: y
 
 const accountKey = (account: Account | null) => (account ? `${account.browser}:${account.profile}` : "anon");
 
-/** Session cache key for a library list or the playlists feed; search is never cached. */
-function cacheKey(account: Account | null, request: LoadRequest | "playlists"): string | null {
-	if (request === "playlists") return `${accountKey(account)}|playlists`;
+/** Session cache key for the playlists feed. */
+const playlistsKey = (account: Account | null) => `${accountKey(account)}|playlists`;
+
+/** Session cache key for a library list; search is never cached. */
+function cacheKey(account: Account | null, request: LoadRequest): string | null {
 	if (request.kind === "search") return null;
 	return `${accountKey(account)}|${request.kind === "playlist" ? `playlist:${request.id}` : request.kind}`;
 }
@@ -163,7 +165,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 	const schedule = deps.setTimeout ?? ((fn, ms) => setTimeout(fn, ms));
 	const unschedule = deps.clearTimeout ?? ((handle) => clearTimeout(handle as NodeJS.Timeout));
 
-	return function (pi: ExtensionAPI) {
+	return (pi: ExtensionAPI) => {
 		let player: Player | undefined;
 		let account: Account | null = null;
 		/** "Continue without an account" lasts for this Pi session. */
@@ -187,7 +189,10 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 		const versions = new Map<string, Promise<string | null>>();
 		const managedVersion = (path: string) => {
 			let version = versions.get(path);
-			if (!version) versions.set(path, (version = ytDlpVersion({ path }).catch(() => null)));
+			if (!version) {
+				version = ytDlpVersion({ path }).catch(() => null);
+				versions.set(path, version);
+			}
 			return version;
 		};
 
@@ -204,7 +209,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 					resolveAudio(track, { account, cookieArg: currentCookieArg(), ytDlpPath: ytDlpPath(), signal, probe: probeStream, cooldowns, now }),
 			}));
 
-		function popover(home: string, init: Parameters<typeof initPopover>[0], tui: HostTui, theme: HostTheme, keys: HostKeybindings, done: (v: void) => void) {
+		function popover(home: string, init: Parameters<typeof initPopover>[0], tui: HostTui, theme: HostTheme, keys: HostKeybindings, done: () => void) {
 			const p = getPlayer();
 			const view = viewTheme(theme);
 			const location = { home };
@@ -342,7 +347,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							break;
 						}
 						case "loadPlaylists": {
-							const key = cacheKey(account, "playlists")!;
+							const key = playlistsKey(account);
 							const gen = cacheGen;
 							const hit = effect.refresh ? undefined : cache.get(key);
 							if (hit && "playlists" in hit) {
@@ -480,7 +485,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 
 			function close() {
 				release();
-				done(undefined);
+				done();
 			}
 
 			const start = initPopover({ ...init, player: p.getState(), snapshot });
@@ -577,7 +582,10 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				readConfig({ home }).catch((): Config => ({ version: 1, account: null })),
 				detectBrowsers({ home }).catch((): Browser[] => []),
 				resolveTools({ home, env })
-					.then((t) => toDeps((tools = t)))
+					.then((t) => {
+						tools = t;
+						return toDeps(t);
+					})
 					.catch(() => null),
 				setupInfo(home),
 			]);

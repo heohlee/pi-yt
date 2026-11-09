@@ -531,13 +531,14 @@ function openSource(state: PopoverState, source: SourceRef, focusRight: boolean,
 		restoreIndex: null,
 		focus: focusRight ? "right" : state.focus,
 	};
-	if (source.kind === "search") return { state: { ...base, list: emptyList() }, effects };
 	if (source.kind === "queue") {
 		const tracks = state.player?.queue ?? [];
 		return { state: { ...base, list: { ...emptyList(), status: "ready", tracks } }, effects };
 	}
+	const request = pageRequest(source, page);
+	if (!request) return { state: { ...base, list: emptyList() }, effects };
 	const id = state.nextId;
-	effects.push({ type: "load", id, request: pageRequest(source, page)! });
+	effects.push({ type: "load", id, request });
 	return { state: { ...base, nextId: id + 1, list: loadingList(id) }, effects };
 }
 
@@ -724,7 +725,8 @@ function errorNotice(error: { kind: string; message: string; hint: string }, ret
 const offersAction = (error: { kind: string }) => error.kind === "extract" || error.kind === "missing";
 
 function dialogKey(state: PopoverState, key: Key): Result {
-	const dialog = state.dialog!;
+	const dialog = state.dialog;
+	if (!dialog) return { state, effects: [] };
 	const close = { ...state, dialog: null };
 	if (dialog.type === "download") {
 		if (key !== "esc") return { state, effects: [] };
@@ -1168,6 +1170,7 @@ export function keyFromInput(data: string, matches: (data: string, id: string) =
 		case "\b":
 			return "backspace";
 	}
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: unmapped control sequences are not text input.
 	if (!data || /[\u0000-\u001f\u007f-\u009f]/.test(data)) return undefined;
 	return { text: data };
 }

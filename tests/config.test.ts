@@ -36,7 +36,7 @@ test("writeConfig stores only browser and profile with private modes", async (t)
 	const home = await fakeHome(t);
 	const env = { XDG_CONFIG_HOME: path.join(home, "xdg") };
 	const extra = { browser: "firefox", profile: "default-release", cookies: "SECRET", label: "Firefox" };
-	await writeConfig({ home, env }, { version: 1, account: extra as never });
+	await writeConfig({ home, env }, { account: extra as never });
 	const file = path.join(home, "xdg", "pi-yt", "config.json");
 	assert.deepEqual(JSON.parse(await readFile(file, "utf8")), {
 		version: 1,
@@ -50,7 +50,7 @@ test("writeConfig stores only browser and profile with private modes", async (t)
 		account: { browser: "firefox", profile: "default-release" },
 	});
 
-	await writeConfig({ home, env }, { version: 1, account: null });
+	await writeConfig({ home, env }, { account: null });
 	assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { version: 1, account: null });
 	assert.equal((await stat(file)).mode & 0o777, 0o600);
 });

@@ -175,10 +175,10 @@ test("S23 updateStatePath uses an absolute XDG_STATE_HOME and ignores a relative
 
 function fakeSpawn(script: { stdout?: string; code?: number; error?: NodeJS.ErrnoException; hang?: boolean } = {}) {
 	const calls: { cmd: string; args: string[] }[] = [];
-	const killed: string[] = [];
+	const killed: (NodeJS.Signals | number)[] = [];
 	const spawn = (cmd: string, args: string[]) => {
 		calls.push({ cmd, args });
-		const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: (s?: string) => boolean };
+		const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: (signal?: NodeJS.Signals | number) => boolean };
 		child.stdout = new PassThrough();
 		child.stderr = new PassThrough();
 		child.kill = (signal = "SIGTERM") => {

@@ -553,7 +553,10 @@ test("S18 reopening /yt returns to the source and cursor left, without yt-dlp; D
 			config = { version: 1, account: next.account as typeof ACCOUNT | null };
 		},
 		source: {
-			listSource: async (kind) => (kinds.push(kind), { ok: true, tracks: page(1, 10), hasMore: false }),
+			listSource: async (kind) => {
+				kinds.push(kind);
+				return { ok: true, tracks: page(1, 10), hasMore: false };
+			},
 			listPlaylists: async () => ({ ok: true, playlists: [] }),
 			listPlaylist: async () => ({ ok: true, tracks: [] }),
 			search: async () => ({ ok: true, tracks: [] }),
@@ -601,7 +604,7 @@ test("S15 the player's resolver passes the connected account's cookieArg to yt-d
 	assert.equal(typeof resolver, "function");
 	const result = await resolver!(TRACKS[0], { signal: new AbortController().signal });
 	assert.deepEqual(result, { ok: true, url: "https://stream.example/a" });
-	assert.deepEqual(seen, [{ id: "a", account: ACCOUNT, cookieArg: "firefox:default-release", signal: true }]);
+	assert.deepEqual([...seen], [{ id: "a", account: ACCOUNT, cookieArg: "firefox:default-release", signal: true }]);
 	assert.equal(h.playerDeps[0].cookieArg?.(), "firefox:default-release");
 
 	const { playerDeps } = await disconnect({
@@ -641,13 +644,19 @@ test("S17 /yt resolves the tools on open and passes the yt-dlp path to source, r
 	const { resolved, ...h } = setupHarness([NO_TOOLS, managed], {
 		readConfig: async () => ({ version: 1, account: ACCOUNT }),
 		source: {
-			listSource: async (_k, opts) => (seen.push({ fn: "listSource", ytDlpPath: opts?.ytDlpPath }), { ok: true, tracks: TRACKS }),
+			listSource: async (_k, opts) => {
+				seen.push({ fn: "listSource", ytDlpPath: opts?.ytDlpPath });
+				return { ok: true, tracks: TRACKS };
+			},
 			listPlaylists: async () => ({ ok: true, playlists: [] }),
 			listPlaylist: async () => ({ ok: true, tracks: [] }),
 			search: async () => ({ ok: true, tracks: [] }),
 			verifySession: async () => ({ ok: true }),
 		},
-		resolveAudio: async (track, opts) => (seen.push({ fn: "resolveAudio", ytDlpPath: opts?.ytDlpPath }), { ok: true, url: "https://s/" + track.id }),
+		resolveAudio: async (track, opts) => {
+			seen.push({ fn: "resolveAudio", ytDlpPath: opts?.ytDlpPath });
+			return { ok: true, url: `https://s/${track.id}` };
+		},
 	});
 	const first = await openYt(h as ReturnType<typeof harness>);
 	assert.deepEqual(resolved, [{ home: "/nonexistent-home", env: {} }]);
@@ -679,7 +688,7 @@ test("S17 the install effect wires fetch, progress and abort, and re-resolves th
 		},
 	});
 	const ui = await openYt(h as ReturnType<typeof harness>);
-	assert.ok(ui.lines().some((l) => /▸ ✗ yt-dlp   reads YouTube\s+Install yt-dlp/.test(l)), ui.lines().join("\n"));
+	assert.ok(ui.lines().some((l) => /▸ ✗ yt-dlp {3}reads YouTube\s+Install yt-dlp/.test(l)), ui.lines().join("\n"));
 	await ui.press("\r");
 	assert.ok(ui.lines().some((l) => l.includes("Version   2026.10.26 (official release)")));
 	assert.ok(ui.lines().some((l) => l.includes("Into      ~/.local/share/pi-yt/bin")), ui.lines().join("\n"));
@@ -693,7 +702,7 @@ test("S17 the install effect wires fetch, progress and abort, and re-resolves th
 	assert.equal(calls.length, 2);
 	assert.deepEqual({ ...calls[1], signal: calls[1].signal.aborted }, { home: "/nonexistent-home", platform: "linux", arch: "x64", fetch: fetchFn, signal: false });
 	progress!({ phase: "download", received: 20_583_484, total: 41_166_968 });
-	assert.ok(ui.lines().some((l) => /Downloading yt-dlp  ━+  20\.6\/41\.2 MB/.test(l)), ui.lines().join("\n"));
+	assert.ok(ui.lines().some((l) => /Downloading yt-dlp {2}━+ {2}20\.6\/41\.2 MB/.test(l)), ui.lines().join("\n"));
 	finish!({ ok: true, path: MANAGED });
 	await ui.press();
 	await ui.press();
@@ -710,7 +719,10 @@ test("S17 the install effect wires fetch, progress and abort, and re-resolves th
 test("S17 Copy command and Check again", async () => {
 	const copied: string[] = [];
 	const h = setupHarness([{ ytDlp: { path: "/usr/bin/yt-dlp", source: "system" }, mpv: null }, { ytDlp: { path: "/usr/bin/yt-dlp", source: "system" }, mpv: { path: "/usr/bin/mpv" } }], {
-		copyToClipboard: async (text) => (copied.push(text), false),
+		copyToClipboard: async (text) => {
+			copied.push(text);
+			return false;
+		},
 	});
 	const ui = await openYt(h as ReturnType<typeof harness>);
 	await ui.press("\r");
@@ -737,7 +749,7 @@ test("S19 a missing mpv opens Dependencies without calling the source; Check aga
 	const ui = await openYt(h as ReturnType<typeof harness>);
 	const gate = ui.lines();
 	assert.ok(gate.some((l) => /YouTube\s+Dependencies/.test(l)), gate.join("\n"));
-	assert.ok(gate.some((l) => /✗ mpv      plays the audio\s+How to install mpv/.test(l)));
+	assert.ok(gate.some((l) => /✗ mpv {6}plays the audio\s+How to install mpv/.test(l)));
 	assert.ok(!gate.some((l) => l.includes("Firefox") || l.includes("Recommended")));
 	await ui.press("\t", "r", "/", "\x1b[C");
 	assert.deepEqual(rec.calls, []);
@@ -1054,9 +1066,18 @@ function offerHarness(answer: Promise<{ latest: string; current: string } | null
 	const updates: unknown[] = [];
 	const h = harness({
 		resolveTools: async () => ({ ytDlp: { path: MANAGED, source: "managed" }, mpv: { path: "/usr/bin/mpv" } }),
-		checkYtDlpUpdate: (opts) => (checks.push(opts as (typeof checks)[number]), answer),
-		ytDlpVersion: async (opts) => (versions.push(opts.path), "2026.10.26"),
-		updateYtDlp: async (opts) => (updates.push({ path: opts.path, source: opts.source }), { ok: true }),
+		checkYtDlpUpdate: (opts) => {
+			checks.push(opts as (typeof checks)[number]);
+			return answer;
+		},
+		ytDlpVersion: async (opts) => {
+			versions.push(opts.path);
+			return "2026.10.26";
+		},
+		updateYtDlp: async (opts) => {
+			updates.push({ path: opts.path, source: opts.source });
+			return { ok: true };
+		},
 		...over,
 	});
 	return { ...h, checks, versions, updates };
@@ -1182,7 +1203,7 @@ test("S28 a source, verify or install call that throws shows its error instead o
 	assert.ok(!lines.some((l) => l.includes("Loading…")), lines.join("\n"));
 	await ui.press(DOWN, DOWN, DOWN, DOWN, "\r");
 	lines = ui.lines();
-	assert.ok(lines.some((l) => /│ Could not load from YouTube\.  Try again\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(lines.some((l) => /│ Could not load from YouTube\. {2}Try again\.\s+│$/.test(l)), lines.join("\n"));
 	assert.ok(!lines.some((l) => l.includes("Loading…")), lines.join("\n"));
 	await ui.close();
 

@@ -147,6 +147,7 @@ const MAX_PROFILE_NAME = 40;
 
 function profileDisplayName(name: unknown, folder: string): string {
 	if (typeof name !== "string") return folder;
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: strips control characters from the browser-provided profile name.
 	const clean = Array.from(name.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim())
 		.slice(0, MAX_PROFILE_NAME)
 		.join("")
@@ -184,7 +185,7 @@ async function chromiumProfiles(dir: string): Promise<{ name: string; folder: st
 		.filter(plainFolder)
 		.sort((a, b) => (a === "Default" ? -1 : b === "Default" ? 1 : naturalOrder(a, b)));
 	const exists = await Promise.all(folders.map((folder) => isDir(path.join(dir, folder))));
-	const found = folders.filter((_, i) => exists[i]).map((folder) => ({ name: names.get(folder)!, folder }));
+	const found = folders.filter((_, i) => exists[i]).map((folder) => ({ name: names.get(folder) ?? folder, folder }));
 	if (found.length) return found;
 	return (await isDir(path.join(dir, "Default"))) ? [{ name: "Default", folder: "Default" }] : [];
 }

@@ -19,13 +19,13 @@ type Script = { stdout?: string; stderr?: string; code?: number; error?: NodeJS.
 
 function fakeSpawn(script: Script = {}) {
 	const calls: { cmd: string; args: string[] }[] = [];
-	const killed: string[] = [];
+	const killed: (NodeJS.Signals | number)[] = [];
 	const spawn: SpawnFn = (cmd, args) => {
 		calls.push({ cmd, args: [...args] });
 		const child = new EventEmitter() as EventEmitter & {
 			stdout: PassThrough;
 			stderr: PassThrough;
-			kill: (signal?: string) => boolean;
+			kill: (signal?: NodeJS.Signals | number) => boolean;
 		};
 		child.stdout = new PassThrough();
 		child.stderr = new PassThrough();

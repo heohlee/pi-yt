@@ -45,6 +45,7 @@ const playing = (over: Partial<PlayerState> = {}): PlayerState => ({
 	shuffle: true,
 	position: 0,
 	queue: TRACKS,
+	resolving: false,
 	...over,
 });
 
@@ -431,7 +432,7 @@ function pagedState() {
 // S14: a full page ends with Load more (dim); while the page loads it reads Loading more….
 test("S14 Load more and Loading more… rows follow the tracks and fit", () => {
 	const idle = apply(pagedState(), key("up"));
-	let raw = render(idle, 120);
+	const raw = render(idle, 120);
 	assert.ok(raw.some((l) => l.includes(`\x1b[${SGR.dim}m  Load more\x1b[39m`)), raw.map(stripAnsi).join("\n"));
 	const at = raw.map(stripAnsi).findIndex((l) => l.includes("Load more"));
 	assert.ok(stripAnsi(raw[at - 1]).includes("South of the River"), "Load more is right after the last track");
@@ -506,7 +507,7 @@ test("S17 the download shows progress in MB with esc cancel, then Verifying…",
 	const id = (effects[0] as { id: number }).id;
 	const half = apply(state, { type: "installProgress", id, progress: { phase: "download", received: 20_583_484, total: 41_166_968 } });
 	const lines = plain(half, 100);
-	assert.ok(lineMatching(lines, /│ Downloading yt-dlp  ━+  20\.6\/41\.2 MB\s+│$/), lines.join("\n"));
+	assert.ok(lineMatching(lines, /│ Downloading yt-dlp {2}━+ {2}20\.6\/41\.2 MB\s+│$/), lines.join("\n"));
 	assert.ok(has(lines, "esc cancel"));
 	const raw = render(half, 100).join("\n");
 	assert.ok(raw.includes(`\x1b[${SGR.accent}m━`) && raw.includes(`\x1b[${SGR.dim}m━`), "bar shows filled and empty parts");
@@ -528,7 +529,7 @@ test("S17 install success and failure screens", () => {
 	const done = apply(state, { type: "installed", id, result: { ok: true } }, { type: "deps", deps: { mpv: false, ytDlp: "managed" } });
 	const lines = plain(done, 100);
 	assert.ok(has(lines, "✓ yt-dlp installed"));
-	assert.ok(lines.some((l) => /✓ yt-dlp   reads YouTube\s+\(managed\)/.test(l)), lines.join("\n"));
+	assert.ok(lines.some((l) => /✓ yt-dlp {3}reads YouTube\s+\(managed\)/.test(l)), lines.join("\n"));
 	assert.ok(!has(lines, "✗ yt-dlp"));
 	assert.ok(render(done, 100).some((l) => l.includes(`\x1b[${SGR.success}m✓ yt-dlp installed`)));
 
@@ -578,7 +579,7 @@ test("S23 Account has no Update yt-dlp; the offer reads `yt-dlp <new> available 
 	const menu = accountChoice("managed");
 	assert.ok(!has(plain(menu, 120), "Update yt-dlp"), plain(menu, 120).join("\n"));
 	const offer = apply(mainState({ deps: { mpv: true, ytDlp: "managed" }, setup: SETUP }), { type: "updateAvailable", latest: "2026.11.05" });
-	assert.ok(lineMatching(plain(offer, 120), /│ yt-dlp 2026\.11\.05 available  ▸ Update \(u\) · Later \(l\)\s+│$/), plain(offer, 120).join("\n"));
+	assert.ok(lineMatching(plain(offer, 120), /│ yt-dlp 2026\.11\.05 available {2}▸ Update \(u\) · Later \(l\)\s+│$/), plain(offer, 120).join("\n"));
 	assertFits(offer, "update offer");
 	const updating = apply(offer, key({ text: "u" }));
 	assert.ok(has(plain(updating, 120), "Updating yt-dlp…"));
@@ -717,7 +718,9 @@ test("S23 hover repaints only the hovered cells in the warning role and keeps th
 	assert.equal(visibleWidth(hovered.lines[hit.y]), 120);
 	assert.ok(hovered.lines[hit.y].includes(`\x1b[${SGR.warning}m`), JSON.stringify(hovered.lines[hit.y]));
 	assert.ok(!plainFrame.lines[hit.y].includes(`\x1b[${SGR.warning}m`));
-	hovered.lines.forEach((line, i) => i !== hit.y && assert.equal(line, plainFrame.lines[i]));
+	hovered.lines.forEach((line, i) => {
+		if (i !== hit.y) assert.equal(line, plainFrame.lines[i]);
+	});
 	// The text after the hovered cells keeps its own color (the border).
 	assert.ok(hovered.lines[hit.y].endsWith(`\x1b[${SGR.border}m│\x1b[39m`));
 });
@@ -761,8 +764,8 @@ test("S25 the offer reads `yt-dlp <latest> available  ▸ Update (u) · Later (l
 		const lines = plain(offerState(), width);
 		assert.ok(lineMatching(lines, new RegExp(`^│ ${OFFER_LINE.replace(/[.()]/g, "\\$&")}\\s+│$`)), `${width}\n${lines.join("\n")}`);
 		const long = plain(offerState(`2026.11.05.${"9".repeat(100)}`), width);
-		const row = offerRow(long);
-		assert.ok(row && row.endsWith("▸ Update (u) · Later (l) │") && row.includes("…"), `${width}: ${row}`);
+		const row = offerRow(long) ?? "";
+		assert.ok(row.endsWith("▸ Update (u) · Later (l) │") && row.includes("…"), `${width}: ${row}`);
 		assert.equal(visibleWidth(row), width);
 	}
 	assertFits(offerState(), "offer");

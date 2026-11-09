@@ -8,6 +8,7 @@ import { existsSync, statSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createPlayer, type PlayerDeps, type Track } from "../lib/player.ts";
 import { cookieArg } from "../lib/browsers.ts";
+import type { ResolveResult } from "../lib/resolver.ts";
 
 type Command = unknown[];
 
@@ -654,10 +655,10 @@ function fakeResolver(opts: { hold?: string[]; fail?: string[] } = {}) {
 	const resolver: NonNullable<PlayerDeps["resolver"]> = (t, { signal }) => {
 		calls.push(t.id);
 		signals.set(t.id, signal);
-		const answer = (ok: boolean) =>
+		const answer = (ok: boolean): ResolveResult =>
 			ok
-				? { ok: true as const, url: stream(t) }
-				: { ok: false as const, error: { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "" } };
+				? { ok: true, url: stream(t) }
+				: { ok: false, error: { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "" } };
 		if (opts.hold?.includes(t.id)) return new Promise((resolve) => held.set(t.id, (ok) => resolve(answer(ok))));
 		return Promise.resolve(answer(!opts.fail?.includes(t.id)));
 	};

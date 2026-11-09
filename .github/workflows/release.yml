@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Test release check
+        run: node --test .github/scripts/release-check.test.cjs
+
+      # GITHUB_REF_NAME is the pushed tag, for example v1.2.3.
+      - name: Check tag, version and release notes
+        run: node .github/scripts/release-check.cjs "$GITHUB_REF_NAME"
+
+      # Dev-only transitive packages declare install scripts; none are needed to test, type check or lint.
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Test
+        run: npm test
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint and format
+        run: npm run lint
+
+      - name: Package contents
+        run: npm pack --dry-run
+
+  publish:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Waits for the owner's approval; the npm trusted publisher is bound to this environment.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      # Trusted publishing needs npm 11.5.1 or later.
+      - name: Check npm version
+        run: |
+          npm --version
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"
+
+      # Authenticates with OIDC through the trusted publisher; no token is stored.
+      - name: Publish
+        run: npm publish --provenance
+
+  github-release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create release from notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file ".github/release-notes/$GITHUB_REF_NAME.md"

@@ -68,6 +68,8 @@ The `Security` workflow runs CodeQL (JavaScript/TypeScript) and `npm audit --aud
 
 Trusted publishing needs a trusted publisher configured for the `pi-yt` package on npmjs.com: GitHub Actions, repository `heohlee/pi-yt`, workflow `release.yml` and environment `npm`. No npm token is stored in the repository.
 
+npm only lets you add a trusted publisher to a package that already exists, so the first version is published once by hand (`npm publish` with two-factor authentication, without provenance). Add the trusted publisher right after it; a new configuration expires if no publish uses it within two days, so release the next tag soon after. Then restrict token-based publishing in the package settings.
+
 ## Privacy
 
 pi-yt reads the user's YouTube library through their browser session. Never commit, paste or log cookies, browser profile data, account emails or full yt-dlp output, whether in code, fixtures, issues, PRs or release notes. Tests must never touch real browsers, keyrings, the network or mpv; use the fakes in `tests/`.

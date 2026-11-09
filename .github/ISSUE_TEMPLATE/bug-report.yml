@@ -1,0 +1,91 @@
+name: Bug report
+description: Report incorrect behavior in pi-yt
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem in pi-yt. Describe what happened, what you expected, and how to reproduce it.
+
+        **Do not paste cookies, emails, or full yt-dlp output that contains account data.**
+  - type: textarea
+    id: problem
+    attributes:
+      label: Observed behavior
+      description: Describe the incorrect behavior you observed and what you were doing when it happened.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: List the steps to reproduce the problem, including the /yt screens, keys or clicks involved.
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Where it runs
+      options:
+        - Pi
+        - Gentle Shell
+    validations:
+      required: true
+  - type: input
+    id: host-version
+    attributes:
+      label: Host version
+      description: The Pi version, or the Gentle Shell version if you use it.
+      placeholder: "e.g. pi 1.5.0 / gentle-shell 4.7.0"
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: pi-yt, mpv and yt-dlp versions, and whether yt-dlp is the system one or the copy pi-yt installed (shown on the Dependencies screen or with `--version`).
+      placeholder: |
+        pi-yt: 0.1.0
+        mpv: 0.41.0
+        yt-dlp: 2026.10.26 (managed)
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser used for the account
+      options:
+        - No account
+        - Firefox
+        - Zen
+        - Chromium
+        - Chrome
+        - Brave
+        - Helium
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, the operating system, terminal, or other relevant information. Remove account data first.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and did not find an equivalent report.
+          required: true
+        - label: I removed cookies, emails and other account data from everything I pasted.
+          required: true

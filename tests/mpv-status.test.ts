@@ -286,9 +286,8 @@ test("stop cancels timers and closes the socket", async () => {
 	}
 });
 
-// S24: PI_YT_MPV_SOCKET, then the old GENTLE_SHELL_YT_MPV_SOCKET, then <runtime>/pi-yt/mpv.sock.
-test("S24 resolveSocketPath prefers PI_YT_MPV_SOCKET and still accepts GENTLE_SHELL_YT_MPV_SOCKET", () => {
-	assert.equal(resolveSocketPath({ PI_YT_MPV_SOCKET: "/new.sock", GENTLE_SHELL_YT_MPV_SOCKET: "/old.sock" }), "/new.sock");
-	assert.equal(resolveSocketPath({ GENTLE_SHELL_YT_MPV_SOCKET: "/old.sock", XDG_RUNTIME_DIR: "/run/u" }), "/old.sock");
+// S24: PI_YT_MPV_SOCKET, then <runtime>/pi-yt/mpv.sock.
+test("S24 resolveSocketPath prefers PI_YT_MPV_SOCKET", () => {
+	assert.equal(resolveSocketPath({ PI_YT_MPV_SOCKET: "/new.sock", XDG_RUNTIME_DIR: "/run/u" }), "/new.sock");
 	assert.equal(resolveSocketPath({ XDG_RUNTIME_DIR: "/run/u" }), "/run/u/pi-yt/mpv.sock");
 });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { installYtDlp, releaseAsset, updateYtDlp, YT_DLP, type Release } from "../lib/installer.ts";
@@ -287,28 +287,4 @@ test("S17 updateYtDlp runs -U only on the managed copy and maps errors without s
 		error: { kind: "timeout", message: "yt-dlp took too long to update.", hint: "Check your connection and retry." },
 	});
 	assert.deepEqual(hang.killed, ["SIGTERM"]);
-});
-
-// S24: installs always go to pi-yt/bin, even when an old gentle-shell-yt/bin copy exists; the old copy is left alone.
-test("S24 installYtDlp targets pi-yt/bin and leaves the old gentle-shell-yt copy untouched", async () => {
-	const s = await scratch();
-	try {
-		const oldDir = path.join(s.home, ".local", "share", "gentle-shell-yt", "bin");
-		await mkdir(oldDir, { recursive: true });
-		await writeFile(path.join(oldDir, "yt-dlp"), "old");
-		const result = await installYtDlp({
-			home: s.home,
-			env: {},
-			platform: "linux",
-			arch: "x64",
-			fetch: fakeFetch([BODY]).fetch,
-			release: release(BODY),
-		});
-		const target = path.join(s.home, ".local", "share", "pi-yt", "bin", "yt-dlp");
-		assert.deepEqual(result, { ok: true, path: target });
-		assert.deepEqual(await readFile(target), BODY);
-		assert.equal(await readFile(path.join(oldDir, "yt-dlp"), "utf8"), "old");
-	} finally {
-		await s.cleanup();
-	}
 });

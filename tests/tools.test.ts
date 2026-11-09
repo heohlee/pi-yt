@@ -165,20 +165,3 @@ test("S24 managedBinDir is pi-yt/bin", () => {
 	assert.equal(managedBinDir({ home: "/h", env: {} }), "/h/.local/share/pi-yt/bin");
 	assert.equal(managedBinDir({ home: "/h", env: { XDG_DATA_HOME: "/data" } }), "/data/pi-yt/bin");
 });
-
-// S24: a yt-dlp installed under the old gentle-shell-yt folder is still found as managed; pi-yt/bin wins.
-test("S24 resolveTools finds the managed yt-dlp in the old gentle-shell-yt/bin, after pi-yt/bin", async () => {
-	const s = await scratch();
-	try {
-		const home = path.join(s.root, "home");
-		for (const env of [{}, { XDG_DATA_HOME: path.join(s.root, "data") }] as NodeJS.ProcessEnv[]) {
-			const data = env.XDG_DATA_HOME ?? path.join(home, ".local", "share");
-			const old = await s.exe(path.join(data, "gentle-shell-yt", "bin"), "yt-dlp");
-			assert.deepEqual((await resolveTools({ home, env: { ...env, PATH: "" } })).ytDlp, { path: old, source: "managed" });
-			const current = await s.exe(managedBinDir({ home, env }), "yt-dlp");
-			assert.deepEqual((await resolveTools({ home, env: { ...env, PATH: "" } })).ytDlp, { path: current, source: "managed" });
-		}
-	} finally {
-		await s.cleanup();
-	}
-});

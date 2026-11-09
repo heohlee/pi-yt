@@ -23,8 +23,7 @@ export interface MpvStatusHandle {
 }
 
 export function resolveSocketPath(env: NodeJS.ProcessEnv = process.env): string {
-	// GENTLE_SHELL_YT_MPV_SOCKET is the name used before the pi-yt rename.
-	const override = env.PI_YT_MPV_SOCKET || env.GENTLE_SHELL_YT_MPV_SOCKET;
+	const override = env.PI_YT_MPV_SOCKET;
 	if (override) return override;
 	return path.join(env.XDG_RUNTIME_DIR || os.tmpdir(), "pi-yt", "mpv.sock");
 }

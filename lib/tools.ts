@@ -32,11 +32,6 @@ export function managedBinDir(location: ToolsLocation): string {
 	return dataBinDir("pi-yt", location);
 }
 
-/** Where releases before the pi-yt rename installed yt-dlp; still searched, never written. */
-export function legacyManagedBinDir(location: ToolsLocation): string {
-	return dataBinDir("gentle-shell-yt", location);
-}
-
 async function isExecutable(file: string): Promise<boolean> {
 	try {
 		if (!(await stat(file)).isFile()) return false;
@@ -62,7 +57,7 @@ const pathDirs = (env: NodeJS.ProcessEnv) => (env.PATH ?? "").split(path.delimit
 export async function resolveTools({ home, env = process.env }: ToolsLocation): Promise<Tools> {
 	const dirs = pathDirs(env);
 	const [system, mpv] = await Promise.all([findExecutable("yt-dlp", dirs), findExecutable("mpv", dirs)]);
-	const managed = system ? null : await findExecutable("yt-dlp", [managedBinDir({ home, env }), legacyManagedBinDir({ home, env })]);
+	const managed = system ? null : await findExecutable("yt-dlp", [managedBinDir({ home, env })]);
 	return {
 		ytDlp: system ? { path: system, source: "system" } : managed ? { path: managed, source: "managed" } : null,
 		mpv: mpv ? { path: mpv } : null,

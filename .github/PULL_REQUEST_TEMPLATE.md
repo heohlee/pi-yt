@@ -9,7 +9,7 @@
 ## Verification
 
 <!-- List commands and checks actually completed, with results:
-     node --test tests/, tsc --noEmit, biome ci,
+     npm test, npm run typecheck, npm run lint,
      and any manual check in Pi. -->
 
 ## Not verified

@@ -3,7 +3,15 @@
   "version": "0.1.0",
   "description": "Browse and play YouTube from Pi and Gentle Shell: your likes, history, recommendations and playlists through your browser session, played with mpv and yt-dlp.",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heohlee/pi-yt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/heohlee/pi-yt/issues"
+  },
+  "homepage": "https://github.com/heohlee/pi-yt#readme",
   "keywords": [
     "pi-package",
     "pi",
@@ -15,16 +23,37 @@
     "mpv",
     "yt-dlp"
   ],
+  "files": [
+    "extensions/",
+    "lib/"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "pi": {
     "extensions": [
       "./extensions"
     ]
   },
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "typecheck": "tsc -p .",
+    "lint": "biome ci",
+    "format": "biome format --write"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-tui": "^1.5.0",
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
   }
 }

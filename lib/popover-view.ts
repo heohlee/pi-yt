@@ -248,12 +248,12 @@ function paintCells(line: string, x: number, end: number, paint: (text: string) 
 	let col = 0;
 	let rest = line;
 	while (rest) {
-		const escape = ESCAPE.exec(rest);
-		if (escape) {
-			if (col < end) replay += escape[0];
-			if (col < x) before += escape[0];
-			else if (col >= end) after += escape[0];
-			rest = rest.slice(escape[0].length);
+		const ansi = ESCAPE.exec(rest);
+		if (ansi) {
+			if (col < end) replay += ansi[0];
+			if (col < x) before += ansi[0];
+			else if (col >= end) after += ansi[0];
+			rest = rest.slice(ansi[0].length);
 			continue;
 		}
 		const next = rest.search(/\x1b/);
@@ -376,7 +376,7 @@ type Row = { line: string; spans: Span[] };
  */
 function noticeRow(state: PopoverState, t: ViewTheme, inner: number): Row | null {
 	if (state.updating) return { line: t.fg("dim", UPDATING), spans: [] };
-	if (offerShown(state)) return offerRow(state.offer!, t, inner);
+	if (state.offer && offerShown(state)) return offerRow(state.offer, t, inner);
 	const notice = state.notice;
 	if (!notice) return null;
 	const message = t.fg(notice.tone === "info" ? "text" : (notice.tone ?? "error"), sanitize(notice.message));
@@ -431,7 +431,8 @@ function downloadRow(received: number, total: number | null, inner: number, t: V
 
 /** Install yt-dlp and How to install mpv, drawn instead of the current screen. */
 function dialogBody(state: PopoverState, inner: number, t: ViewTheme, marks: Marks): string[] {
-	const dialog = state.dialog!;
+	const dialog = state.dialog;
+	if (!dialog) return [];
 	const lines = [titleRow(state, inner, t), RULE, ""];
 	let footer = "enter choose · esc back";
 	switch (dialog.type) {
@@ -484,7 +485,9 @@ function mainBody(state: PopoverState, inner: number, opts: ViewOptions, marks: 
 	/** Note a pane's region and the hits of its visible lines, `x` columns from the body's left edge. */
 	const place = (pane: "left" | "right", x: number, w: number, spans: Span[][]) => {
 		marks.panes.push({ pane, x, end: x + w, top, bottom: top + h });
-		spans.slice(0, h).forEach((line, i) => line.forEach((s) => mark(marks, top + i, x + s.x, x + Math.min(w, s.end), s.target)));
+		spans.slice(0, h).forEach((line, i) => {
+			for (const s of line) mark(marks, top + i, x + s.x, x + Math.min(w, s.end), s.target);
+		});
 	};
 
 	let panes: string[];
@@ -566,7 +569,7 @@ function leftPane(state: PopoverState, w: number, h: number, t: ViewTheme, scrol
 
 function currentTrackId(state: PopoverState): string | undefined {
 	const p = state.player;
-	if (!p || !p.running || p.idle || p.position < 0) return undefined;
+	if (!p?.running || p.idle || p.position < 0) return undefined;
 	return p.queue[p.position]?.id;
 }
 
@@ -683,7 +686,7 @@ function playerRow(state: PopoverState, inner: number, t: ViewTheme): Row {
 		const who = artist && room > visibleWidth(title) + 4 ? `${title}  ${t.fg("dim", truncate(artist, room - visibleWidth(title) - 2))}` : truncate(title, room);
 		return { line: spread(`${t.fg("accent", "◌")} ${who}`, tail, inner), spans: [] };
 	}
-	if (!p || !p.running || p.idle || !title) {
+	if (!p?.running || p.idle || !title) {
 		const idle = "■ Nothing playing";
 		const hints = fitHints(tiers, inner - visibleWidth(idle) - 2) || tiers[tiers.length - 1];
 		return { line: spread(t.fg("dim", idle), t.fg("dim", hints), inner), spans: [] };

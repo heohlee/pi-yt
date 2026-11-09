@@ -53,10 +53,10 @@ export function truncate(text: string, width: number): string {
 	let used = 0;
 	let rest = text;
 	while (rest) {
-		const escape = ANSI_START.exec(rest);
-		if (escape) {
-			out += escape[0];
-			rest = rest.slice(escape[0].length);
+		const ansi = ANSI_START.exec(rest);
+		if (ansi) {
+			out += ansi[0];
+			rest = rest.slice(ansi[0].length);
 			continue;
 		}
 		const next = rest.search(/\x1b/);

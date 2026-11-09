@@ -10,14 +10,14 @@ type Script = { stdout?: string; stderr?: string; code?: number; error?: NodeJS.
 /** Fake yt-dlp: one script per spawn, in order; the last script repeats. */
 function fakeSpawn(...scripts: Script[]) {
 	const calls: { cmd: string; args: string[] }[] = [];
-	const killed: string[] = [];
+	const killed: (NodeJS.Signals | number)[] = [];
 	const spawn: SpawnFn = (cmd, args) => {
 		const script = scripts[Math.min(calls.length, scripts.length - 1)] ?? {};
 		calls.push({ cmd, args: [...args] });
 		const child = new EventEmitter() as EventEmitter & {
 			stdout: PassThrough;
 			stderr: PassThrough;
-			kill: (signal?: string) => boolean;
+			kill: (signal?: NodeJS.Signals | number) => boolean;
 		};
 		child.stdout = new PassThrough();
 		child.stderr = new PassThrough();
@@ -347,7 +347,7 @@ test("S16 the readiness wait stays within readyTimeoutMs while probes are slow",
 test("S16 probeStream skips non-https links and does not follow redirects", async () => {
 	const { createServer } = await import("node:http");
 	let hits = 0;
-	const server = createServer((req, res) => {
+	const server = createServer((_req, res) => {
 		hits++;
 		res.writeHead(302, { location: "/elsewhere" }).end();
 	});

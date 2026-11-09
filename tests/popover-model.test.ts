@@ -47,6 +47,7 @@ const playerState = (over: Partial<PlayerState> = {}): PlayerState => ({
 	shuffle: false,
 	position: 0,
 	queue: TRACKS,
+	resolving: false,
 	...over,
 });
 

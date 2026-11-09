@@ -129,15 +129,17 @@ export async function installYtDlp(opts: InstallOptions): Promise<InstallResult>
 	const target = path.join(dir, "yt-dlp");
 	const temp = path.join(dir, `.yt-dlp-${randomBytes(6).toString("hex")}.part`);
 	let created = false;
+	let response: Response | undefined;
+	let locked: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
 	try {
-		let response: Response;
 		try {
 			response = await fetchFn(asset.url, { signal, redirect: "follow" });
 		} catch {
 			throw new Stop(signal.aborted ? stopped() : NETWORK);
 		}
-		if (!response.ok || !response.body) throw new Stop(NETWORK);
+		// Redirects are followed (GitHub hands off to its CDN), but the bytes must still arrive over https.
+		if (!response.ok || !response.body || !response.url.startsWith("https://")) throw new Stop(NETWORK);
 		const announced = Number(response.headers.get("content-length"));
 		if (Number.isFinite(announced) && announced > maxBytes) throw new Stop(TOO_LARGE);
 		const total = Number.isFinite(announced) && announced > 0 ? announced : (asset.size ?? null);
@@ -147,6 +149,7 @@ export async function installYtDlp(opts: InstallOptions): Promise<InstallResult>
 		created = true;
 		const hash = createHash("sha256");
 		const reader = response.body.getReader();
+		locked = reader;
 		const onAbort = () => void reader.cancel().catch(() => {});
 		signal.addEventListener("abort", onAbort, { once: true });
 		let received = 0;
@@ -180,6 +183,8 @@ export async function installYtDlp(opts: InstallOptions): Promise<InstallResult>
 		created = false;
 		return { ok: true, path: target };
 	} catch (error) {
+		// Release the connection on every early exit; a finished body ignores this.
+		void (locked ? locked.cancel() : response?.body?.cancel())?.catch(() => {});
 		if (created) await unlink(temp).catch(() => {});
 		if (error instanceof Stop) return { ok: false, error: { ...error.reason } };
 		return {

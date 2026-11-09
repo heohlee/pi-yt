@@ -935,7 +935,19 @@ const PLAYING: Partial<PlayerState> = { running: true, idle: false, title: "Arua
 
 // S23(1): press captures without acting, click acts; a first click selects a track, a second plays it.
 test("S23 mouse: press captures without acting, click selects then plays, stale frames are ignored", async () => {
-	const h = harness();
+	const kinds: string[] = [];
+	const h = harness({
+		source: {
+			listSource: async (kind) => {
+				kinds.push(kind);
+				return { ok: true, tracks: TRACKS };
+			},
+			listPlaylists: async () => ({ ok: true, playlists: [] }),
+			listPlaylist: async () => ({ ok: true, tracks: [] }),
+			search: async () => ({ ok: true, tracks: [] }),
+			verifySession: async () => ({ ok: true }),
+		},
+	});
 	const ui = await openYt(h);
 	const lines = ui.lines();
 	const kerala = find(lines, "Kerala");
@@ -951,14 +963,18 @@ test("S23 mouse: press captures without acting, click selects then plays, stale 
 	await ui.press();
 	assert.deepEqual(h.fake.calls, [["play", TRACKS, 1]]);
 
-	// A click on a frame of another size is ignored.
+	// A click on a frame of another size (width or terminal rows) is ignored: History neither loads nor takes the cursor.
 	const history = find(ui.lines(), "History");
-	component.handleMouse!(mouse("click", history.x, history.y, { width: 100 }));
+	const before = ui.lines();
+	assert.equal(component.handleMouse!(mouse("click", history.x, history.y, { width: 100 })), undefined);
 	await ui.press();
-	assert.ok(!ui.lines().some((l) => l.includes("Loading…")), "History did not open");
+	assert.deepEqual(kinds, ["recommended"], "History did not load");
+	assert.deepEqual(ui.lines(), before, "nothing changed on screen");
 	component.handleMouse!(mouse("click", history.x, history.y));
 	await ui.press();
-	assert.ok(ui.lines().some((l) => l.includes("History")) && h.fake.calls.length === 1);
+	assert.deepEqual(kinds, ["recommended", "history"]);
+	assert.ok(ui.lines().some((l) => l.includes("│ History · 2")), ui.lines().join("\n"));
+	assert.equal(h.fake.calls.length, 1);
 	await ui.close();
 });
 
@@ -1148,4 +1164,73 @@ test("S25 update offer: a click on ▸ Update (u) runs updateYtDlp and shows the
 	assert.deepEqual(h.updates, [{ path: MANAGED, source: "managed" }]);
 	assert.ok(ui.lines().some((l) => l.includes("yt-dlp is up to date.")), ui.lines().join("\n"));
 	await ui.close();
+});
+
+// ---- Review advisories (S28, S31) ----
+
+const boom = async (): Promise<never> => {
+	throw new Error("boom");
+};
+const THROWING: NonNullable<YoutubeDeps["source"]> = { listSource: boom, listPlaylists: boom, listPlaylist: boom, search: boom, verifySession: boom };
+
+// S28: a request whose call throws ends in the error state its screen already shows, never Loading… forever.
+test("S28 a source, verify or install call that throws shows its error instead of loading forever", async () => {
+	const ui = await openYt(harness({ source: THROWING }));
+	let lines = ui.lines();
+	assert.ok(lines.some((l) => /│ Could not load from YouTube\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(lines.some((l) => / Try again\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(!lines.some((l) => l.includes("Loading…")), lines.join("\n"));
+	await ui.press(DOWN, DOWN, DOWN, DOWN, "\r");
+	lines = ui.lines();
+	assert.ok(lines.some((l) => /│ Could not load from YouTube\.  Try again\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(!lines.some((l) => l.includes("Loading…")), lines.join("\n"));
+	await ui.close();
+
+	const connect = await openYt(harness({ source: THROWING, readConfig: async () => ({ version: 1, account: null }) }));
+	await connect.press("\r");
+	lines = connect.lines();
+	assert.ok(lines.some((l) => /│ Could not load from YouTube\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(lines.some((l) => /│ ▸ Retry\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(!lines.some((l) => l.includes("checking…")), lines.join("\n"));
+	await connect.close();
+
+	const install = await openYt(setupHarness([{ ytDlp: null, mpv: { path: "/usr/bin/mpv" } }], { installYtDlp: boom }) as ReturnType<typeof harness>);
+	await install.press("\r", "\r");
+	lines = install.lines();
+	assert.ok(lines.some((l) => /│ Could not install yt-dlp\.\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(lines.some((l) => /│ ▸ Retry\s+│$/.test(l)), lines.join("\n"));
+	assert.ok(!lines.some((l) => l.includes("Downloading")), lines.join("\n"));
+	await install.press("\x1b"); // Back to Dependencies; the next esc closes /yt
+	await install.close();
+});
+
+// S31: a load that answers after Disconnect never puts the old account's list back in the session cache.
+test("S31 a playlists load still running at Disconnect does not refill the cache", async () => {
+	let calls = 0;
+	let release: ((result: { ok: true; playlists: { id: string; title: string; count: number | null }[] }) => void) | undefined;
+	const h = harness({
+		source: {
+			listSource: async () => ({ ok: true, tracks: TRACKS }),
+			listPlaylists: () => {
+				calls++;
+				return new Promise((resolve) => (release = resolve));
+			},
+			listPlaylist: async () => ({ ok: true, tracks: [] }),
+			search: async () => ({ ok: true, tracks: [] }),
+			verifySession: async () => ({ ok: true }),
+		},
+	});
+	const ui = await openYt(h);
+	await ui.press(DOWN, DOWN, DOWN, DOWN, "\r");
+	assert.equal(calls, 1);
+	await ui.press(DOWN, DOWN, DOWN, "\r", DOWN, "\r");
+	assert.deepEqual(h.writes, [{ account: null }]);
+	release!({ ok: true, playlists: [{ id: "PL1", title: "Road trip", count: 2 }] });
+	await ui.press();
+	await ui.close();
+
+	const again = await openYt(h);
+	await again.press(DOWN, DOWN, DOWN, DOWN, "\r");
+	assert.equal(calls, 2, "the playlists are asked again, not read from the cache");
+	await again.close();
 });

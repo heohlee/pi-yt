@@ -1276,6 +1276,113 @@ test("R3-001 enqueue during a pending pick is appended after the picked track", 
 	}
 });
 
+// Review advisories (S24 P-a1): an enqueue waiting on a pick that a second pick overtakes goes after the second pick.
+test("P-a1 enqueue during a pick overtaken by a second pick is appended after the second pick", async () => {
+	const fake = fakeResolver({ hold: ["id1", "id4", "id5", "id9"] });
+	const t = await setup({ resolver: fake.resolver });
+	try {
+		await t.player.ensureRunning();
+		const first = t.player.play([track(1), track(2)], 0);
+		await waitFor(() => fake.calls.includes("id1"), "first resolve");
+		const queued = t.player.enqueue(track(9));
+		const second = t.player.play([track(4), track(5)], 0);
+		await waitFor(() => fake.calls.includes("id4"), "second resolve");
+		fake.release("id1");
+		await first;
+		await settle();
+		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [], "nothing loads before the winning pick");
+		fake.release("id4");
+		await Promise.all([second, queued]);
+		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [
+			fast(track(4), -1, "replace"),
+			watch(track(5), "append"),
+			watch(track(9), "append"),
+		]);
+		assert.deepEqual(t.player.getState().queue, [track(4), track(5), track(9)]);
+	} finally {
+		await t.teardown();
+	}
+});
+
+// S24 P-b2 / S23: a replace mpv rejects fails the pick, lists nothing mpv never loaded, and the waiting enqueue plays.
+test("P-b2 a failed replace rejects play(), keeps no unloaded track in the queue, and the enqueue uses append-play", async () => {
+	const fake = fakeResolver({ hold: ["id4", "id9"] });
+	const t = await setup({ resolver: fake.resolver });
+	try {
+		await t.player.ensureRunning();
+		const playing = t.player.play([track(4), track(5)], 0);
+		await waitFor(() => fake.calls.includes("id4"), "pick resolve");
+		const queued = t.player.enqueue(track(9));
+		queued.catch(() => {}); // awaited below; a failed assert before it must not leave it unhandled
+		await settle();
+		t.mpv.failNext("loading failed");
+		fake.release("id4");
+		await assert.rejects(playing, {
+			kind: "command",
+			message: "mpv: loading failed",
+			hint: "The video may be unavailable; try updating yt-dlp.",
+		});
+		assert.deepEqual(t.player.getState().queue, [], "mpv never loaded the picked tracks");
+		await queued;
+		assert.deepEqual(t.mpv.actions(), [fast(track(4), -1, "replace"), watch(track(9), "append-play")]);
+		assert.deepEqual(t.player.getState().queue, [track(9)]);
+		assert.equal(t.player.getState().resolving, false);
+	} finally {
+		await t.teardown();
+	}
+});
+
+// S24 P-d: two enqueues waiting on one pick are appended after it in the order they were asked.
+test("P-d two enqueues during one pick are appended in order", async () => {
+	const fake = fakeResolver({ hold: ["id4", "id8", "id9"] });
+	const t = await setup({ resolver: fake.resolver });
+	try {
+		await t.player.ensureRunning();
+		const playing = t.player.play([track(4)], 0);
+		await waitFor(() => fake.calls.includes("id4"), "pick resolve");
+		const a = t.player.enqueue(track(8));
+		const b = t.player.enqueue(track(9));
+		fake.release("id4");
+		await Promise.all([playing, a, b]);
+		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [
+			fast(track(4), -1, "replace"),
+			watch(track(8), "append"),
+			watch(track(9), "append"),
+		]);
+		assert.deepEqual(t.player.getState().queue, [track(4), track(8), track(9)]);
+	} finally {
+		await t.teardown();
+	}
+});
+
+// S23: a resolver that throws instead of rejecting still settles the pick: the watch URL plays and enqueue goes on.
+test("S23 a resolver that throws synchronously falls back to the watch URL and settles the pick for enqueue", async () => {
+	const calls: string[] = [];
+	const t = await setup({
+		resolver: (tr) => {
+			calls.push(tr.id);
+			throw new Error("boom");
+		},
+	});
+	try {
+		await t.player.ensureRunning();
+		const outcome: string[] = [];
+		const playing = t.player.play([track(1)], 0).then(
+			() => outcome.push("played"),
+			() => outcome.push("play failed"),
+		);
+		const queued = t.player.enqueue(track(2)).then(() => outcome.push("enqueued"));
+		await waitFor(() => outcome.length === 2, "pick and enqueue settle");
+		await Promise.all([playing, queued]);
+		assert.deepEqual(outcome, ["played", "enqueued"]);
+		assert.deepEqual(t.mpv.actions().filter((c) => c[0] === "loadfile"), [watch(track(1), "replace"), watch(track(2), "append")]);
+		assert.deepEqual(t.player.getState().queue, [track(1), track(2)]);
+		assert.equal(t.player.getState().resolving, false);
+	} finally {
+		await t.teardown();
+	}
+});
+
 // ---- S21 dwell pre-resolve ----
 
 // S21(3): a track prepared under the cursor plays from the shared cache, without resolving again.

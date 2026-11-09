@@ -142,13 +142,19 @@ export function renderFrame(state: PopoverState, opts: ViewOptions): Frame {
 	if (width < 8) return { lines: [truncate("YouTube", Math.max(0, width))], hits: [], panes: [] };
 	const inner = width - 4;
 	const marks: Marks = { hits: [], panes: [] };
-	const body = state.dialog
-		? dialogBody(state, inner, t, marks)
-		: state.screen === "dependencies"
-			? dependenciesBody(state, inner, t, marks)
-			: state.screen === "connect"
-				? connectBody(state, inner, t, marks)
-				: mainBody(state, inner, opts, marks);
+	const body =
+		!state.dialog && state.screen === "main"
+			? mainBody(state, inner, opts, marks)
+			: fitBody(
+					state.dialog
+						? dialogBody(state, inner, t, marks)
+						: state.screen === "dependencies"
+							? dependenciesBody(state, inner, t, marks)
+							: connectBody(state, inner, t, marks),
+					marks,
+					opts.height - 2,
+					cursorId(state),
+				);
 	const edge = (l: string, r: string) => t.fg("border", `${l}${"─".repeat(width - 2)}${r}`);
 	const side = t.fg("border", "│");
 	const lines = [
@@ -181,6 +187,37 @@ export function targetId(target: Target): string {
 		default:
 			return `${target.type}:${target.index}`;
 	}
+}
+
+/** Hit id of the row under the cursor on connect, Dependencies or a dialog, or null. */
+function cursorId(state: PopoverState): string | null {
+	const { dialog } = state;
+	if (dialog) return dialog.type === "download" ? null : `dialog:${dialog.cursor}`;
+	return state.screen === "dependencies" ? `dependency:${state.gate.cursor}` : `connect:${state.connect.cursor}`;
+}
+
+/**
+ * Fit a screen body (title, rule, rows, rule, footer) into `max` lines: the title and footer stay,
+ * the rows between them show their end (the choices) or scroll up to the cursor row, and the hits move with them.
+ */
+function fitBody(body: string[], marks: Marks, max: number, cursor: string | null): string[] {
+	if (body.length <= max) return body;
+	const room = max - 4;
+	if (room < 1) {
+		marks.hits = marks.hits.filter((h) => h.y < max);
+		return body.slice(0, max);
+	}
+	const tail = body.length - 2;
+	// The choices sit at the end, so the text above them gives way first, unless the cursor is up there.
+	const keep = marks.hits.find((h) => targetId(h.span.target) === cursor)?.y;
+	const off = keep === undefined ? tail - 2 - room : Math.min(tail - 2 - room, Math.max(0, keep - 2));
+	marks.hits = marks.hits.flatMap((h) => {
+		if (h.y < 2) return [h];
+		if (h.y >= tail) return [{ ...h, y: h.y - (tail - 2 - room) }];
+		const y = h.y - off;
+		return y >= 2 && y < 2 + room ? [{ ...h, y }] : [];
+	});
+	return [...body.slice(0, 2), ...body.slice(2 + off, 2 + off + room), ...body.slice(tail)];
 }
 
 /** The hit under cell (x, y), with where on it the cell falls (0 first cell, 1 last), or null. */

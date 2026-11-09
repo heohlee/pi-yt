@@ -101,6 +101,9 @@ const CLEAR_FAILED: Notice = {
 	message: "Could not update the account settings.",
 	hint: "Check ~/.config/pi-yt permissions.",
 };
+/** What a source or verify call that threw instead of answering shows. */
+const SOURCE_FAILED: youtube.Failure = { ok: false, error: { kind: "network", message: "Could not load from YouTube.", hint: "Try again." } };
+const INSTALL_FAILED = { ok: false as const, error: { kind: "install", message: "Could not install yt-dlp.", hint: "Try again." } };
 
 /** One loaded list for the Pi session: titles and ids only, never cookies. */
 type CachedList = { tracks: youtube.Track[]; hasMore: boolean } | { playlists: youtube.Playlist[] };
@@ -167,6 +170,8 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 		let anonymous = false;
 		/** Lists loaded in this Pi session, in memory only; cleared when the account changes. */
 		const cache = new Map<string, CachedList>();
+		/** Bumped when the cache is cleared; a load started before it is never stored. */
+		let cacheGen = 0;
 		/** Where the last popover was left (S18), in memory only; /yt reopens there. */
 		let snapshot: PopoverSnapshot | null = null;
 		/** yt-dlp and mpv as last resolved: on each /yt, and after Install, Update or Check again. */
@@ -245,10 +250,12 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				refresh();
 			};
 
-			const request = <T>(id: number, call: (signal: AbortSignal) => Promise<T>, onResult: (result: T) => Action) => {
+			/** Run a call for the popover; one that throws answers `failed`, so its screen shows the error. */
+			const request = <T>(id: number, call: (signal: AbortSignal) => Promise<T>, onResult: (result: T) => Action, failed: T) => {
 				const controller = new AbortController();
 				controllers.set(id, controller);
-				call(controller.signal)
+				new Promise<T>((resolve) => resolve(call(controller.signal)))
+					.catch(() => failed)
 					.then((result) => {
 						controllers.delete(id);
 						if (!controller.signal.aborted) dispatch(onResult(result));
@@ -305,11 +312,13 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 								effect.id,
 								(signal) => source.verifySession(effect.account, { signal, ytDlpPath: ytDlpPath() }),
 								(result) => ({ type: "verified", id: effect.id, result }),
+								SOURCE_FAILED,
 							);
 							break;
 						case "load": {
 							const { request: req } = effect;
 							const key = cacheKey(account, req);
+							const gen = cacheGen;
 							const start = req.kind === "search" ? 1 : (req.start ?? 1);
 							const hit = key && start === 1 && !(req.kind !== "search" && req.refresh) ? cache.get(key) : undefined;
 							if (hit && "tracks" in hit) {
@@ -325,14 +334,16 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 											? source.listPlaylist(req.id, { account, signal, start, ytDlpPath: ytDlpPath() })
 											: source.listSource(req.kind, { account, signal, start, ytDlpPath: ytDlpPath() }),
 								(result) => {
-									remember(key, start, result);
+									if (gen === cacheGen) remember(key, start, result);
 									return { type: "loaded", id: effect.id, result };
 								},
+								SOURCE_FAILED,
 							);
 							break;
 						}
 						case "loadPlaylists": {
 							const key = cacheKey(account, "playlists")!;
+							const gen = cacheGen;
 							const hit = effect.refresh ? undefined : cache.get(key);
 							if (hit && "playlists" in hit) {
 								cached.push({ type: "playlistsLoaded", id: effect.id, result: { ok: true, playlists: hit.playlists } });
@@ -342,10 +353,11 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 								effect.id,
 								(signal) => source.listPlaylists({ account, signal, ytDlpPath: ytDlpPath() }),
 								(result) => {
-									if (result.ok)
+									if (result.ok && gen === cacheGen)
 										cache.set(key, { playlists: result.playlists.map(({ id, title, count }) => ({ id, title, count })) });
 									return { type: "playlistsLoaded", id: effect.id, result };
 								},
+								SOURCE_FAILED,
 							);
 							break;
 						}
@@ -374,6 +386,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 									return result;
 								},
 								(result) => ({ type: "installed", id: effect.id, result: result.ok ? { ok: true } : result }),
+								INSTALL_FAILED,
 							);
 							break;
 						case "update": {
@@ -398,6 +411,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 						case "saveAccount":
 							account = effect.account;
 							cache.clear();
+							cacheGen++;
 							// Stream URLs resolved with the previous session are never reused.
 							p.forgetStreams();
 							writeConfig(location, { account: effect.account }).catch(() =>
@@ -408,6 +422,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							// The running mpv keeps playing; only later yt-dlp/mpv calls lose the cookies.
 							account = null;
 							cache.clear();
+							cacheGen++;
 							p.forgetStreams();
 							Promise.resolve()
 								.then(() => writeConfig(location, { account: null }))

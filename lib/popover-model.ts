@@ -377,9 +377,9 @@ function rightCount(state: PopoverState): number {
 	return tracks > 0 ? 2 + tracks + (hasLoadMore(state) ? 1 : 0) : 0;
 }
 
-/** Whether the right pane ends with the Load more row. */
+/** Whether the right pane ends with the Load more row; search results are a single page. */
 export function hasLoadMore(state: PopoverState): boolean {
-	return state.list.status === "ready" && state.list.hasMore && state.list.tracks.length > 0;
+	return state.list.status === "ready" && state.list.hasMore && state.list.tracks.length > 0 && state.source?.kind !== "search";
 }
 
 /** Right pane index of the Load more row, or -1. */
@@ -597,10 +597,11 @@ function verify(state: PopoverState, target: number): Result {
 	};
 }
 
-/** Back from the connect screen to main while an account is still saved; reloads a list cut off by toConnect. */
+/** Back from the connect screen to main while an account is still saved; reloads a list or page cut off by toConnect. */
 function backToMain(state: PopoverState): Result {
 	const main: PopoverState = { ...state, screen: "main", focus: "left", leftKey: "account", accountMenu: null };
 	if (state.list.status === "loading" && state.source) return openSource(main, state.source, false);
+	if (state.list.more !== null) return loadMore({ ...main, list: { ...main.list, more: null } });
 	return { state: main, effects: [] };
 }
 
@@ -682,7 +683,8 @@ function startInstall(state: PopoverState, retry: Retry | null): Result {
 /** Update yt-dlp: runs on the managed copy; a system copy is the package manager's job. */
 function startUpdate(state: PopoverState, retry: Retry | null): Result {
 	if (state.updating) return { state, effects: [] };
-	const source = state.deps?.ytDlp ?? null;
+	// Unknown tools (the check failed): the update effect looks at the real copy and reports what it finds.
+	const source = state.deps ? state.deps.ytDlp : undefined;
 	if (source === "system") return { state: { ...state, notice: { ...SYSTEM_UPDATE } }, effects: [] };
 	if (source === null) return { state: { ...state, notice: { ...YTDLP_MISSING, ...(retry ? { retry } : {}) } }, effects: [] };
 	const id = state.nextId;

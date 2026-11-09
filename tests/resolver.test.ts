@@ -56,7 +56,7 @@ const JS = ["--js-runtimes", `node:${process.execPath}`];
 // S21: the strategy table, in order: the visionos client, then the full resolve.
 const FAST = ["-f", "bestaudio/best", "-g", "--no-warnings", ...JS, "--extractor-args", "youtube:player_client=visionos;skip=hls"];
 const SLOW = ["-f", "bestaudio/best", "-g", "--no-warnings", ...JS];
-const SECRET = "ERROR: [youtube] abc123: Sign in to confirm; cookie SID=supersecret";
+const SECRET = "ERROR: [youtube] abc123: Login required; cookie SID=supersecret";
 
 // S21: the visionos try comes first and a link from it is the only run; the browser spec goes to yt-dlp only when given.
 test("S21/S4 a working visionos try is the only run, with exactly its args, with and without the cookie arg", async () => {
@@ -324,23 +324,23 @@ test("S16 abort during the readiness wait returns cancelled", async () => {
 });
 
 // S16 (verify advisory): the readiness wait never runs past readyTimeoutMs, even while a probe is slow.
+// S12 (#25): proved without a wall-clock margin: the probe never answers, so only the readyTimeoutMs bound ends it.
 test("S16 the readiness wait stays within readyTimeoutMs while probes are slow", async () => {
-	const started = Date.now();
+	const reasons: unknown[] = [];
 	const result = await resolveAudio(TRACK, {
 		spawn: fakeSpawn({ stdout: `${STREAM}\n` }).spawn,
 		pollMs: 10,
-		readyTimeoutMs: 100,
+		readyTimeoutMs: 20,
 		probe: (_url, signal) =>
-			new Promise<number>((resolve, reject) => {
-				const timer = setTimeout(() => resolve(403), 80);
+			new Promise<number>((_resolve, reject) => {
 				signal.addEventListener("abort", () => {
-					clearTimeout(timer);
+					reasons.push((signal.reason as Error).name);
 					reject(new Error("aborted"));
 				});
 			}),
 	});
 	assert.deepEqual(result, { ok: true, url: STREAM });
-	assert.ok(Date.now() - started < 160, `took ${Date.now() - started} ms`);
+	assert.deepEqual(reasons, ["TimeoutError"]);
 });
 
 // S16 (verify advisory): probeStream only contacts https links and never follows redirects.
@@ -469,7 +469,7 @@ test("S21 every strategy failing returns the existing error without stderr", asy
 	const account = { browser: "firefox" as const, profile: "default-release" };
 	const cases: [Script[], unknown][] = [
 		[[fails("ERROR: unable to extract; SID=supersecret")], { kind: "extract", message: "yt-dlp could not read YouTube.", hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry." }],
-		[[fails(VIDEO[0]), fails(`${SECRET} not a bot`)], { kind: "signin", message: "YouTube session not found in Firefox.", hint: "Sign in at youtube.com in Firefox, then retry." }],
+		[[fails(VIDEO[0]), fails(`${SECRET} not a bot`)], { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." }],
 	];
 	for (const [scripts, error] of cases) {
 		const fake = fakeSpawn(...scripts);
@@ -541,4 +541,84 @@ test("S21 rate-limited stderr is blocked and 'This video is unavailable' is a vi
 	await resolveAudio(t("y"), { spawn: fake.spawn, cooldowns: unavailable });
 	assert.equal(blockedRecently(unavailable, undefined), false);
 	assert.ok(usesVisionos(fake.calls[2].args), "a single video failure leaves visionos on");
+});
+
+// S11 (#25): a bot check or rate limit on the last strategy is reported as a block, not as a missing session or network.
+test("S11 a block on every strategy is reported as a block, with or without an account", async () => {
+	const account = { browser: "firefox" as const, profile: "default-release" };
+	const BLOCK = { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." };
+	for (const stderr of [BLOCKED[0], BLOCKED[2]]) {
+		for (const signedIn of [{ account, cookieArg: "firefox:default-release" }, {}]) {
+			const fake = fakeSpawn(fails(stderr));
+			assert.deepEqual(await resolveAudio(TRACK, { spawn: fake.spawn, ...signedIn }), { ok: false, error: BLOCK }, stderr);
+			assert.equal(fake.calls.length, 2);
+		}
+	}
+	// Sign-in failures that are not a block keep their own diagnosis.
+	const login = fakeSpawn(fails(SECRET));
+	assert.deepEqual(await resolveAudio(TRACK, { spawn: login.spawn, account, cookieArg: "firefox:default-release" }), {
+		ok: false,
+		error: { kind: "signin", message: "YouTube session not found in Firefox.", hint: "Sign in at youtube.com in Firefox, then retry." },
+	});
+});
+
+// S10 (#25): a cancel or a missing yt-dlp says nothing about the strategy, so they never count toward the streak.
+test("S10 cancelled and missing visionos runs never turn visionos off", async () => {
+	const t = (id: string) => ({ ...TRACK, url: `https://www.youtube.com/watch?v=${id}` });
+	const cancelled = new Map<string, number>();
+	for (const id of ["a", "b", "c"]) {
+		const fake = fakeSpawn({ hang: true });
+		const controller = new AbortController();
+		const pending = resolveAudio(t(id), { spawn: fake.spawn, signal: controller.signal, cooldowns: cancelled });
+		while (fake.calls.length < 1) await new Promise((r) => setImmediate(r));
+		controller.abort();
+		assert.deepEqual(await pending, { ok: false, error: { kind: "extract", message: "cancelled", hint: "" } });
+	}
+	assert.equal(blockedRecently(cancelled, undefined), false);
+	const next = fakeSpawn(ok);
+	await resolveAudio(t("d"), { spawn: next.spawn, cooldowns: cancelled });
+	assert.deepEqual(next.calls.map((c) => c.args), [[...FAST, t("d").url]]);
+
+	const missing = new Map<string, number>();
+	const enoent = Object.assign(new Error("spawn yt-dlp ENOENT"), { code: "ENOENT" });
+	for (const id of ["a", "b", "c"]) await resolveAudio(t(id), { spawn: fakeSpawn({ error: enoent }).spawn, cooldowns: missing });
+	assert.equal(blockedRecently(missing, undefined), false);
+	const found = fakeSpawn(ok);
+	await resolveAudio(t("d"), { spawn: found.spawn, cooldowns: missing });
+	assert.deepEqual(found.calls.map((c) => c.args), [[...FAST, t("d").url]]);
+});
+
+// S10 (#25): the full resolve has no fallback, so its failures never start a cooldown of their own.
+test("S10 failures of the full resolve never count as a block", async () => {
+	const t = (id: string) => ({ ...TRACK, url: `https://www.youtube.com/watch?v=${id}` });
+	const cooldowns = new Map<string, number>();
+	let clock = 1_000_000;
+	const opts = { cooldowns, now: () => clock };
+	// visionos is blocked at the start, then the full resolve fails on four tracks while visionos is skipped.
+	await resolveAudio(t("a"), { ...opts, spawn: fakeSpawn(fails(BLOCKED[0]), fails("ERROR: something odd")).spawn });
+	for (const id of ["b", "c", "d"]) {
+		clock += 1000;
+		const fake = fakeSpawn(fails("ERROR: something odd"));
+		await resolveAudio(t(id), { ...opts, spawn: fake.spawn });
+		assert.deepEqual(fake.calls.map((c) => c.args), [[...SLOW, t(id).url]]);
+	}
+	clock = 1_000_000 + STRATEGY_COOLDOWN_MS;
+	assert.equal(blockedRecently(cooldowns, undefined, () => clock), false);
+});
+
+// S12 (#25): a block already turned the strategy off, so the failures before it start over once the cooldown ends.
+test("S12 a block resets the failure streak", async () => {
+	const t = (id: string) => ({ ...TRACK, url: `https://www.youtube.com/watch?v=${id}` });
+	const cooldowns = new Map<string, number>();
+	let clock = 1_000_000;
+	const fake = fakeSpawn(fails(VIDEO[0]), ok, fails(VIDEO[0]), ok, fails(BLOCKED[0]), ok, fails(VIDEO[0]), ok, ok);
+	const opts = { spawn: fake.spawn, cooldowns, now: () => clock };
+	for (const id of ["a", "b", "c"]) await resolveAudio(t(id), opts); // two video failures, then a block
+	assert.equal(blockedRecently(cooldowns, undefined, () => clock), true);
+	clock += STRATEGY_COOLDOWN_MS;
+	await resolveAudio(t("d"), opts); // one video failure after the cooldown
+	assert.equal(blockedRecently(cooldowns, undefined, () => clock), false);
+	await resolveAudio(t("e"), opts);
+	assert.ok(usesVisionos(fake.calls.at(-1)!.args));
+	assert.equal(fake.calls.length, 9);
 });

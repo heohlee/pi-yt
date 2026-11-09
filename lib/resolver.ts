@@ -72,6 +72,8 @@ const EXTRACT: ResolveError = {
 	hint: "Update yt-dlp (yt-dlp -U or your package manager) and retry.",
 };
 const NETWORK: ResolveError = { kind: "network", message: "Could not reach YouTube.", hint: "Check your connection and retry." };
+// A bot check or rate limit: the session and the connection are fine, YouTube refuses this client for a while.
+const BLOCKED: ResolveError = { kind: "network", message: "YouTube is limiting requests right now.", hint: "Wait a few minutes, then retry." };
 
 function classify(stderr: string, account: Account | null | undefined): ResolveError {
 	if (/sign in|login required|cookies|not available for this account|private/i.test(stderr)) {
@@ -164,7 +166,8 @@ function attempt(track: Track, extra: readonly string[], opts: ResolveOptions, c
 		});
 		child.on("close", (code) => {
 			if (code !== 0) {
-				finish({ ok: false, error: classify(stderr, opts.account) }, classifyFailure(stderr));
+				const failure = classifyFailure(stderr);
+				finish({ ok: false, error: failure === "blocked" ? { ...BLOCKED } : classify(stderr, opts.account) }, failure);
 				return;
 			}
 			const url = streamUrl(stdout);
@@ -253,7 +256,11 @@ export async function resolveAudio(track: Track, opts: ResolveOptions = {}): Pro
 			opts.cooldowns?.delete(streak);
 			return untilReady(result.url, opts);
 		}
-		if (run.failure === "blocked") opts.cooldowns?.set(key, now());
+		if (run.failure === "blocked") {
+			// The block turns the strategy off by itself; the failures before it start over afterwards.
+			opts.cooldowns?.set(key, now());
+			opts.cooldowns?.delete(streak);
+		}
 		// A hidden block (e.g. a PO token requirement) can surface as "format not available" on every video:
 		// VIDEO_STREAK_LIMIT video or other failures in a row count as a block, so the worst case stays as before.
 		if ((run.failure === "video" || run.failure === "other") && !last && opts.cooldowns && result.error.kind !== "missing" && !opts.signal?.aborted) {

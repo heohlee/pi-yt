@@ -1,12 +1,12 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { installYtDlp, releaseAsset, updateYtDlp, YT_DLP, type Release } from "../lib/installer.ts";
+import { PassThrough } from "node:stream";
+import { test } from "node:test";
+import { installYtDlp, type Release, releaseAsset, updateYtDlp, YT_DLP } from "../lib/installer.ts";
 import { managedBinDir } from "../lib/tools.ts";
 
 const BODY = Buffer.from("#!/bin/sh\necho fake yt-dlp\n");
@@ -28,7 +28,10 @@ async function scratch() {
  * Fake fetch answering with `chunks`; `hang` keeps the body open after them.
  * `finalUrl` is the URL after redirects (the requested one by default); `cancelled` counts body releases.
  */
-function fakeFetch(chunks: Buffer[], opts: { status?: number; length?: number; hang?: boolean; finalUrl?: string } = {}) {
+function fakeFetch(
+	chunks: Buffer[],
+	opts: { status?: number; length?: number; hang?: boolean; finalUrl?: string } = {},
+) {
 	const urls: string[] = [];
 	const inits: (RequestInit | undefined)[] = [];
 	const state = { cancelled: 0 };
@@ -156,7 +159,11 @@ test("S17 installYtDlp enforces the size limit", async () => {
 	try {
 		const TOO_LARGE = {
 			ok: false,
-			error: { kind: "size", message: "The download is larger than expected.", hint: "Nothing was installed. Retry later." },
+			error: {
+				kind: "size",
+				message: "The download is larger than expected.",
+				hint: "Nothing was installed. Retry later.",
+			},
 		};
 		const announced = await installYtDlp({
 			home: s.home,
@@ -200,7 +207,10 @@ test("S17 aborting installYtDlp deletes the temp file", async () => {
 				if (p.phase === "download" && p.received === 5) controller.abort();
 			},
 		});
-		assert.deepEqual(await pending, { ok: false, error: { kind: "cancelled", message: "Install cancelled.", hint: "" } });
+		assert.deepEqual(await pending, {
+			ok: false,
+			error: { kind: "cancelled", message: "Install cancelled.", hint: "" },
+		});
 		assert.deepEqual(await listing(s.dir), []);
 
 		const slow = await installYtDlp({
@@ -241,10 +251,20 @@ test("S17 installYtDlp reports HTTP errors and unsupported platforms without tou
 		assert.deepEqual(await listing(s.dir), []);
 
 		const fake = fakeFetch([BODY]);
-		const unsupported = await installYtDlp({ home: s.home, env: {}, platform: "freebsd", arch: "x64", fetch: fake.fetch });
+		const unsupported = await installYtDlp({
+			home: s.home,
+			env: {},
+			platform: "freebsd",
+			arch: "x64",
+			fetch: fake.fetch,
+		});
 		assert.deepEqual(unsupported, {
 			ok: false,
-			error: { kind: "unsupported", message: "No official yt-dlp build for this system.", hint: "Install yt-dlp with your package manager." },
+			error: {
+				kind: "unsupported",
+				message: "No official yt-dlp build for this system.",
+				hint: "Install yt-dlp with your package manager.",
+			},
 		});
 		assert.deepEqual(fake.urls, []);
 	} finally {
@@ -257,7 +277,16 @@ const NETWORK = {
 	error: { kind: "network", message: "Could not download yt-dlp.", hint: "Check your connection and retry." },
 };
 const install = (s: { home: string }, fetch: typeof globalThis.fetch, extra: { maxBytes?: number } = {}) =>
-	installYtDlp({ home: s.home, env: {}, platform: "linux", arch: "x64", fetch, release: release(BODY), timeoutMs: 1000, ...extra });
+	installYtDlp({
+		home: s.home,
+		env: {},
+		platform: "linux",
+		arch: "x64",
+		fetch,
+		release: release(BODY),
+		timeoutMs: 1000,
+		...extra,
+	});
 
 // S4 (#25): redirects are followed, but the final download must still come over https.
 test("S4 installYtDlp rejects a download whose final URL after redirects is not https", async () => {
@@ -288,7 +317,11 @@ test("S5 installYtDlp releases the response body on an HTTP error, an announced 
 
 		const TOO_LARGE = {
 			ok: false,
-			error: { kind: "size", message: "The download is larger than expected.", hint: "Nothing was installed. Retry later." },
+			error: {
+				kind: "size",
+				message: "The download is larger than expected.",
+				hint: "Nothing was installed. Retry later.",
+			},
 		};
 		const announced = fakeFetch([BODY], { length: 70 * 1024 * 1024, hang: true });
 		assert.deepEqual(await install(s, announced.fetch), TOO_LARGE);
@@ -313,7 +346,11 @@ test("S8 installYtDlp reports a write failure with the folder to check", async (
 		const fake = fakeFetch([BODY], { hang: true });
 		assert.deepEqual(await install(s, fake.fetch), {
 			ok: false,
-			error: { kind: "write", message: "Could not save yt-dlp.", hint: "Check that ~/.local/share/pi-yt/bin is writable." },
+			error: {
+				kind: "write",
+				message: "Could not save yt-dlp.",
+				hint: "Check that ~/.local/share/pi-yt/bin is writable.",
+			},
 		});
 		assert.equal(fake.cancelled, 1);
 		assert.equal(await readFile(s.dir, "utf8"), "not a folder");
@@ -328,7 +365,11 @@ function fakeSpawn(script: { code?: number; stderr?: string; error?: NodeJS.Errn
 	const killed: (NodeJS.Signals | number)[] = [];
 	const spawn = (cmd: string, args: string[]) => {
 		calls.push({ cmd, args });
-		const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: (signal?: NodeJS.Signals | number) => boolean };
+		const child = new EventEmitter() as EventEmitter & {
+			stdout: PassThrough;
+			stderr: PassThrough;
+			kill: (signal?: NodeJS.Signals | number) => boolean;
+		};
 		child.stdout = new PassThrough();
 		child.stderr = new PassThrough();
 		child.kill = (signal = "SIGTERM") => {
@@ -355,11 +396,19 @@ test("S17 updateYtDlp runs -U only on the managed copy and maps errors without s
 	const system = fakeSpawn();
 	assert.deepEqual(await updateYtDlp({ path: "/usr/bin/yt-dlp", source: "system", spawn: system.spawn }), {
 		ok: false,
-		error: { kind: "system", message: "yt-dlp comes from your system.", hint: "Update yt-dlp with your package manager." },
+		error: {
+			kind: "system",
+			message: "yt-dlp comes from your system.",
+			hint: "Update yt-dlp with your package manager.",
+		},
 	});
 	assert.deepEqual(system.calls, []);
 
-	const failed = await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: fakeSpawn({ code: 1, stderr: "ERROR: SECRET" }).spawn });
+	const failed = await updateYtDlp({
+		path: "/d/yt-dlp",
+		source: "managed",
+		spawn: fakeSpawn({ code: 1, stderr: "ERROR: SECRET" }).spawn,
+	});
 	assert.deepEqual(failed, {
 		ok: false,
 		error: { kind: "update", message: "Could not update yt-dlp.", hint: "Check your connection and retry." },
@@ -367,10 +416,13 @@ test("S17 updateYtDlp runs -U only on the managed copy and maps errors without s
 	assert.ok(!JSON.stringify(failed).includes("SECRET"));
 
 	const enoent = Object.assign(new Error("spawn"), { code: "ENOENT" });
-	assert.deepEqual(await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: fakeSpawn({ error: enoent }).spawn }), {
-		ok: false,
-		error: { kind: "missing", message: "yt-dlp not found", hint: "Install yt-dlp from /yt." },
-	});
+	assert.deepEqual(
+		await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: fakeSpawn({ error: enoent }).spawn }),
+		{
+			ok: false,
+			error: { kind: "missing", message: "yt-dlp not found", hint: "Install yt-dlp from /yt." },
+		},
+	);
 
 	const hang = fakeSpawn({ hang: true });
 	assert.deepEqual(await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: hang.spawn, timeoutMs: 10 }), {
@@ -392,6 +444,9 @@ test("S9 aborting updateYtDlp kills the child and reports the cancel", async () 
 	assert.deepEqual(hang.killed, ["SIGTERM"]);
 
 	const early = fakeSpawn();
-	assert.deepEqual(await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: early.spawn, signal: AbortSignal.abort() }), CANCELLED);
+	assert.deepEqual(
+		await updateYtDlp({ path: "/d/yt-dlp", source: "managed", spawn: early.spawn, signal: AbortSignal.abort() }),
+		CANCELLED,
+	);
 	assert.deepEqual(early.calls, []);
 });

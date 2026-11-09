@@ -1,16 +1,16 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
+import { test } from "node:test";
 import {
 	checkYtDlpUpdate,
 	newerVersion,
 	RELEASES_URL,
-	updateStatePath,
 	UPDATE_CHECK_INTERVAL_MS,
+	updateStatePath,
 	ytDlpVersion,
 } from "../lib/update-check.ts";
 
@@ -29,7 +29,9 @@ function fakeFetch(opts: { body?: unknown; status?: number; fail?: boolean; hang
 		calls.push({ url: String(url), signal: init?.signal ?? undefined, headers: init?.headers });
 		if (opts.fail) throw new TypeError("fetch failed");
 		if (opts.hang)
-			return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+			return new Promise<Response>((_, reject) =>
+				init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)),
+			);
 		const text = typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body ?? { tag_name: "2026.11.05" });
 		return new Response(text, { status: opts.status ?? 200 });
 	};
@@ -43,7 +45,14 @@ test("S23 checkYtDlpUpdate asks GitHub at most once per 24 h and keeps { checked
 	const s = await scratch();
 	try {
 		const f = fakeFetch();
-		const check = (now: number) => checkYtDlpUpdate({ home: s.home, env: {}, fetch: f.fetch, now: () => now, currentVersion: current("2026.10.26") });
+		const check = (now: number) =>
+			checkYtDlpUpdate({
+				home: s.home,
+				env: {},
+				fetch: f.fetch,
+				now: () => now,
+				currentVersion: current("2026.10.26"),
+			});
 		assert.deepEqual(await check(T0), { latest: "2026.11.05", current: "2026.10.26" });
 		assert.equal(f.calls.length, 1);
 		assert.equal(f.calls[0].url, RELEASES_URL);
@@ -99,7 +108,11 @@ test("S23 checkYtDlpUpdate errors are silent: network, status, JSON, tag, versio
 		assert.equal(down.calls.length, 1, "a failed check is not retried within 24 h");
 
 		let now = T0 + 25 * HOUR;
-		for (const f of [fakeFetch({ status: 403 }), fakeFetch({ body: "not json" }), fakeFetch({ body: { tag_name: "v1; rm -rf" } })]) {
+		for (const f of [
+			fakeFetch({ status: 403 }),
+			fakeFetch({ body: "not json" }),
+			fakeFetch({ body: { tag_name: "v1; rm -rf" } }),
+		]) {
 			assert.equal(await run(f, now), null);
 			assert.equal(f.calls.length, 1);
 			now += 25 * HOUR;
@@ -160,14 +173,26 @@ test("S23 checkYtDlpUpdate gives up after the timeout and aborts the request", a
 // S23: the state file follows an absolute XDG_STATE_HOME only.
 test("S23 updateStatePath uses an absolute XDG_STATE_HOME and ignores a relative one", async () => {
 	assert.equal(updateStatePath({ home: "/h", env: { XDG_STATE_HOME: "/x/state" } }), "/x/state/pi-yt/update.json");
-	assert.equal(updateStatePath({ home: "/h", env: { XDG_STATE_HOME: "rel/state" } }), "/h/.local/state/pi-yt/update.json");
+	assert.equal(
+		updateStatePath({ home: "/h", env: { XDG_STATE_HOME: "rel/state" } }),
+		"/h/.local/state/pi-yt/update.json",
+	);
 	assert.equal(updateStatePath({ home: "/h", env: {} }), "/h/.local/state/pi-yt/update.json");
 	const s = await scratch();
 	try {
 		const xdg = path.join(s.home, "xdg");
 		await mkdir(xdg);
-		await checkYtDlpUpdate({ home: s.home, env: { XDG_STATE_HOME: xdg }, fetch: fakeFetch().fetch, now: () => T0, currentVersion: current("2026.10.26") });
-		assert.deepEqual(JSON.parse(await readFile(path.join(xdg, "pi-yt", "update.json"), "utf8")), { checkedAt: T0, latest: "2026.11.05" });
+		await checkYtDlpUpdate({
+			home: s.home,
+			env: { XDG_STATE_HOME: xdg },
+			fetch: fakeFetch().fetch,
+			now: () => T0,
+			currentVersion: current("2026.10.26"),
+		});
+		assert.deepEqual(JSON.parse(await readFile(path.join(xdg, "pi-yt", "update.json"), "utf8")), {
+			checkedAt: T0,
+			latest: "2026.11.05",
+		});
 	} finally {
 		await s.cleanup();
 	}
@@ -178,7 +203,11 @@ function fakeSpawn(script: { stdout?: string; code?: number; error?: NodeJS.Errn
 	const killed: (NodeJS.Signals | number)[] = [];
 	const spawn = (cmd: string, args: string[]) => {
 		calls.push({ cmd, args });
-		const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: (signal?: NodeJS.Signals | number) => boolean };
+		const child = new EventEmitter() as EventEmitter & {
+			stdout: PassThrough;
+			stderr: PassThrough;
+			kill: (signal?: NodeJS.Signals | number) => boolean;
+		};
 		child.stdout = new PassThrough();
 		child.stderr = new PassThrough();
 		child.kill = (signal = "SIGTERM") => {
@@ -201,7 +230,10 @@ test("S23 ytDlpVersion runs --version and returns the version, or null on error,
 	const ok = fakeSpawn({ stdout: "2026.10.26\n" });
 	assert.equal(await ytDlpVersion({ path: "/d/yt-dlp", spawn: ok.spawn }), "2026.10.26");
 	assert.deepEqual(ok.calls, [{ cmd: "/d/yt-dlp", args: ["--version"] }]);
-	assert.equal(await ytDlpVersion({ path: "/d/yt-dlp", spawn: fakeSpawn({ stdout: "2026.10.26\n", code: 1 }).spawn }), null);
+	assert.equal(
+		await ytDlpVersion({ path: "/d/yt-dlp", spawn: fakeSpawn({ stdout: "2026.10.26\n", code: 1 }).spawn }),
+		null,
+	);
 	assert.equal(await ytDlpVersion({ path: "/d/yt-dlp", spawn: fakeSpawn({ stdout: "\x1b[31mnope\n" }).spawn }), null);
 	const enoent = Object.assign(new Error("spawn"), { code: "ENOENT" });
 	assert.equal(await ytDlpVersion({ path: "/d/yt-dlp", spawn: fakeSpawn({ error: enoent }).spawn }), null);
@@ -216,7 +248,13 @@ test("S24 update check uses pi-yt/update.json and the pi-yt User-Agent", async (
 	const s = await scratch();
 	try {
 		const f = fakeFetch();
-		await checkYtDlpUpdate({ home: s.home, env: {}, fetch: f.fetch, now: () => T0, currentVersion: current("2026.10.26") });
+		await checkYtDlpUpdate({
+			home: s.home,
+			env: {},
+			fetch: f.fetch,
+			now: () => T0,
+			currentVersion: current("2026.10.26"),
+		});
 		assert.equal((f.calls[0].headers as Record<string, string>)["User-Agent"], "pi-yt");
 	} finally {
 		await s.cleanup();

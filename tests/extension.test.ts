@@ -1,8 +1,8 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { test } from "node:test";
 import extension from "../extensions/youtube-status.ts";
 
 function fakePi() {

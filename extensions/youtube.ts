@@ -16,22 +16,22 @@ import {
 	tildePath,
 	YT_DLP,
 } from "../lib/installer.ts";
-import { createPlayer as defaultCreatePlayer, type Player, type PlayerDeps } from "../lib/player.ts";
 import {
 	type Action,
 	type Deps,
 	type Effect,
-	initPopover,
+	initOverlay,
 	keyFromInput,
 	type LoadRequest,
 	type Notice,
-	type PopoverSnapshot,
-	type PopoverState,
+	type OverlaySnapshot,
+	type OverlayState,
 	reduce,
 	type SetupInfo,
-	snapshotPopover,
-} from "../lib/popover-model.ts";
-import { type Frame, hitAt, paneAt, type Role, renderFrame, type Scroll, type ViewTheme } from "../lib/popover-view.ts";
+	snapshotOverlay,
+} from "../lib/overlay-model.ts";
+import { type Frame, hitAt, paneAt, type Role, renderFrame, type Scroll, type ViewTheme } from "../lib/overlay-view.ts";
+import { createPlayer as defaultCreatePlayer, type Player, type PlayerDeps } from "../lib/player.ts";
 import { blockedRecently, resolveAudio as defaultResolveAudio, probeStream } from "../lib/resolver.ts";
 import {
 	copyToClipboard as defaultCopyToClipboard,
@@ -191,8 +191,8 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 		const cache = new Map<string, CachedList>();
 		/** Bumped when the cache is cleared; a load started before it is never stored. */
 		let cacheGen = 0;
-		/** Where the last popover was left (S18), in memory only; /yt reopens there. */
-		let snapshot: PopoverSnapshot | null = null;
+		/** Where the last overlay was left (S18), in memory only; /yt reopens there. */
+		let snapshot: OverlaySnapshot | null = null;
 		/** yt-dlp and mpv as last resolved: on each /yt, and after Install, Update or Check again. */
 		let tools: Tools = { ytDlp: null, mpv: null };
 		const ytDlpPath = () => tools.ytDlp?.path;
@@ -234,9 +234,9 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 					}),
 			}));
 
-		function popover(
+		function overlay(
 			home: string,
-			init: Parameters<typeof initPopover>[0],
+			init: Parameters<typeof initOverlay>[0],
 			tui: HostTui,
 			theme: HostTheme,
 			keys: HostKeybindings,
@@ -271,7 +271,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			let frame: (Frame & { width: number; rows: number }) | undefined;
 			/** Id of the hit under the pointer, or null. */
 			let hover: string | null = null;
-			let state: PopoverState;
+			let state: OverlayState;
 
 			const refresh = () => {
 				rendered = undefined;
@@ -287,7 +287,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				refresh();
 			};
 
-			/** Run a call for the popover; one that throws answers `failed`, so its screen shows the error. */
+			/** Run a call for the overlay; one that throws answers `failed`, so its screen shows the error. */
 			const request = <T>(
 				id: number,
 				call: (signal: AbortSignal) => Promise<T>,
@@ -414,7 +414,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							controllers.delete(effect.id);
 							break;
 						case "install":
-							// esc (cancel) or closing the popover aborts the download; the installer removes its temp file.
+							// esc (cancel) or closing the overlay aborts the download; the installer removes its temp file.
 							request(
 								effect.id,
 								async (signal) => {
@@ -438,7 +438,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							);
 							break;
 						case "update": {
-							// Not tied to the popover: closing it must not kill yt-dlp while it replaces itself.
+							// Not tied to the overlay: closing it must not kill yt-dlp while it replaces itself.
 							const ytDlp = tools.ytDlp;
 							const update = ytDlp
 								? updateYtDlp({ path: ytDlp.path, source: ytDlp.source })
@@ -503,7 +503,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 							playback.push(effect);
 					}
 				}
-				// One microtask later, so a cached list never renders before Pi has mounted the popover.
+				// One microtask later, so a cached list never renders before Pi has mounted the overlay.
 				if (cached.length)
 					queueMicrotask(() => {
 						for (const action of cached) dispatch(action);
@@ -533,7 +533,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				if (closed) return;
 				closed = true;
 				stopDwell();
-				snapshot = snapshotPopover(state, scroll);
+				snapshot = snapshotOverlay(state, scroll);
 				unsubscribe();
 				for (const controller of controllers.values()) controller.abort();
 				controllers.clear();
@@ -544,7 +544,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 				done();
 			}
 
-			const start = initPopover({ ...init, player: p.getState(), snapshot });
+			const start = initOverlay({ ...init, player: p.getState(), snapshot });
 			state = start.state;
 			scroll = start.scroll;
 			run(start.effects);
@@ -660,7 +660,7 @@ export function createYoutubeExtension(deps: YoutubeDeps = {}) {
 			const init = { account, anonymous, browsers, deps: found, setup, player: null, configUnreadable };
 			await ctx.ui.custom<void>(
 				(tui, theme, keybindings, done) =>
-					popover(
+					overlay(
 						home,
 						init,
 						tui as HostTui,

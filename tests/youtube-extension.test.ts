@@ -217,7 +217,7 @@ test("headless or non-tui modes notify an error and open nothing", async () => {
 });
 
 // S1/S2/S5: opens a centered overlay, loads Recommended, plays from keys, cancels on close.
-test("/yt opens the popover, runs effects and aborts pending loads on close", async () => {
+test("/yt opens the overlay, runs effects and aborts pending loads on close", async () => {
 	const signals: AbortSignal[] = [];
 	let releaseLater: ((r: TracksResult) => void) | undefined;
 	const { commands, fake, playerDeps } = harness({
@@ -1027,8 +1027,8 @@ test("S21 moving the cursor before 400 ms prepares nothing for the track left", 
 	await ui.close();
 });
 
-// S21(3): closing the popover cancels the wait.
-test("S21 closing the popover cancels a pending dwell prepare", async () => {
+// S21(3): closing the overlay cancels the wait.
+test("S21 closing the overlay cancels a pending dwell prepare", async () => {
 	const h = harness();
 	const ui = await onFirstTrack(h);
 	h.clock.advance(200);
@@ -1341,7 +1341,7 @@ test("S23 update offer: Later hides it for the session without updating", async 
 });
 
 // S23(2): the check never blocks /yt, and a system copy (package manager) is never checked.
-test("S23 update offer: never blocks the popover and is never checked for a system copy or on Dependencies", async () => {
+test("S23 update offer: never blocks the overlay and is never checked for a system copy or on Dependencies", async () => {
 	const pending = offerHarness(new Promise(() => {}));
 	const ui = await openYt(pending);
 	assert.ok(

@@ -12,7 +12,7 @@ body:
     attributes:
       label: Area
       options:
-        - Popover
+        - Overlay
         - Player
         - Account and browsers
         - Install and dependencies

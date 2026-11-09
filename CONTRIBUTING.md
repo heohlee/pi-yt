@@ -34,7 +34,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/), such as `fix: 
 pi-yt is TypeScript run natively by Node.js 24 or newer (type stripping, no build step) and has no runtime dependencies. The tests need nothing installed; the type check and lint use the dev dependencies, so run `npm ci` once. CI runs:
 
 ```sh
-npm test               # node --test tests/, with fakes for mpv, yt-dlp and fetch
+npm test               # all tests/*.test.ts, with fakes for mpv, yt-dlp and fetch
 npm run typecheck      # tsc -p . (strict, no emit)
 npm run lint           # biome ci: lint and format
 npm pack --dry-run     # package contents

@@ -6,7 +6,7 @@ Play your YouTube library from [Pi](https://pi.dev) through the YouTube session 
 
 [![CI](https://github.com/heohlee/pi-yt/actions/workflows/ci.yml/badge.svg)](https://github.com/heohlee/pi-yt/actions/workflows/ci.yml)
 [![Security](https://github.com/heohlee/pi-yt/actions/workflows/security.yml/badge.svg)](https://github.com/heohlee/pi-yt/actions/workflows/security.yml)
-[![npm](https://img.shields.io/npm/v/pi-yt)](https://www.npmjs.com/package/pi-yt)
+[![npm](https://img.shields.io/npm/v/@heohlee/pi-yt)](https://www.npmjs.com/package/@heohlee/pi-yt)
 [![License: MIT](https://img.shields.io/github/license/heohlee/pi-yt)](LICENSE)
 
 </div>
@@ -47,7 +47,7 @@ pi-yt does not talk to YouTube itself; it drives yt-dlp and mpv:
 ### Pi
 
 ```sh
-pi install npm:pi-yt
+pi install npm:@heohlee/pi-yt
 ```
 
 ### From GitHub
@@ -59,7 +59,7 @@ pi install git:github.com/heohlee/pi-yt
 ### Try it without installing
 
 ```sh
-pi -e npm:pi-yt
+pi -e npm:@heohlee/pi-yt
 ```
 
 ### Gentle Shell

@@ -1,5 +1,5 @@
 {
-	"name": "pi-yt",
+	"name": "@heohlee/pi-yt",
 	"version": "0.1.0",
 	"description": "Browse and play YouTube from Pi and Gentle Shell: your likes, history, recommendations and playlists through your browser session, played with mpv and yt-dlp.",
 	"type": "module",

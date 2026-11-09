@@ -247,6 +247,22 @@ test("S19 the connect screen has no tool rows", () => {
 	for (const text of ["✗", "Install yt-dlp", "How to install mpv", "reads YouTube"]) assert.ok(!has(lines, text), text);
 });
 
+// #46: the unreadable-config notice sits under the connect options, in the error color, before the footer.
+test("connect screen shows the unreadable saved account notice", () => {
+	const state = connectState({ configUnreadable: true });
+	const lines = plain(state, 100);
+	const row = lines.findIndex((l) => l.includes("Saved account could not be read."));
+	assert.equal(
+		lines[row],
+		`│ ${pad("Saved account could not be read.  Pick a browser profile to connect again.", 96)} │`,
+	);
+	assert.ok(row > lines.findIndex((l) => l.includes("Continue without an account")));
+	assert.equal(lines[row + 2], `│ ${pad("enter connect · esc close", 96)} │`);
+	assert.ok(render(state, 100)[row].includes(`\x1b[${SGR.error}mSaved account could not be read.`));
+	assert.ok(!has(plain(connectState(), 100), "Saved account could not be read."));
+	assertFits(state, "unreadable");
+});
+
 // S19: ✓ Ready shows as the success notice on the screen the gate leaves for.
 test("S19 ✓ Ready shows on the connect screen after the gate passes", () => {
 	const gate = apply(connectState({ deps: { mpv: false, ytDlp: "system" }, setup: SETUP }), key("down"), key("enter"));

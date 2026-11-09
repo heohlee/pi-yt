@@ -108,6 +108,45 @@ test("init without account opens the connect screen; with an account it opens ma
 	assert.equal(init({ anonymous: true }).state.screen, "main");
 });
 
+// #46: a saved account that could not be read opens connect with a notice; a missing one stays silent.
+const UNREADABLE = {
+	message: "Saved account could not be read.",
+	hint: "Pick a browser profile to connect again.",
+	tone: "error",
+};
+
+test("init with an unreadable config opens connect with the unreadable notice", () => {
+	const out = init({ configUnreadable: true, deps: { mpv: true, ytDlp: "system" } });
+	assert.equal(out.state.screen, "connect");
+	assert.deepEqual(out.state.notice, UNREADABLE);
+	assert.deepEqual(out.effects, []);
+});
+
+test("init with a missing config or after continuing anonymously shows no notice", () => {
+	const missing = init({ configUnreadable: false });
+	assert.equal(missing.state.screen, "connect");
+	assert.equal(missing.state.notice, null);
+
+	const anonymous = init({ configUnreadable: true, anonymous: true });
+	assert.equal(anonymous.state.screen, "main");
+	assert.equal(anonymous.state.notice, null);
+});
+
+test("a missing tool still opens Dependencies over the unreadable notice", () => {
+	const out = init({ configUnreadable: true, deps: { mpv: false, ytDlp: "system" } });
+	assert.equal(out.state.screen, "dependencies");
+	assert.equal(out.state.notice, null);
+	assert.deepEqual(out.effects, []);
+});
+
+test("the unreadable notice clears on the next key and leaves the cursor move intact", () => {
+	const { state, effects } = run(init({ configUnreadable: true }).state, ...keys("down"));
+	assert.equal(state.notice, null);
+	assert.equal(state.screen, "connect");
+	assert.equal(state.connect.cursor, 1);
+	assert.deepEqual(effects, []);
+});
+
 // S3: enter on a browser verifies; ok writes the config and goes to main.
 test("connect: verify ok saves the account and opens main", () => {
 	const { state, effects } = run(init().state, ...keys("down", "enter"));

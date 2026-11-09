@@ -205,6 +205,8 @@ export interface PopoverInit {
 	player: PlayerState | null;
 	/** Where the user left the popover earlier in this Pi session. */
 	snapshot?: PopoverSnapshot | null;
+	/** The saved account file exists but could not be used (#46). */
+	configUnreadable?: boolean;
 }
 
 /** Scroll offsets of both panes, kept by the extension between renders. */
@@ -471,8 +473,15 @@ export function initPopover(init: PopoverInit): InitResult {
 		const gate = { cursor: 0, snapshot: init.snapshot ?? null };
 		return { state: { ...state, screen: "dependencies", gate }, effects: [], scroll: { left: 0, right: 0 } };
 	}
+	if (init.configUnreadable && state.screen === "connect") state.notice = { ...UNREADABLE };
 	return land(state, init.snapshot ?? null);
 }
+
+const UNREADABLE: Notice = {
+	message: "Saved account could not be read.",
+	hint: "Pick a browser profile to connect again.",
+	tone: "error",
+};
 
 /** Where /yt opens with both tools: connect, the remembered place, or main. */
 function land(state: PopoverState, snapshot: PopoverSnapshot | null): InitResult {

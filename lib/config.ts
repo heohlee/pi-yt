@@ -21,16 +21,8 @@ export interface ConfigLocation {
 	env?: NodeJS.ProcessEnv;
 }
 
-const configFile = (folder: string, { home, env = process.env }: ConfigLocation) =>
-	path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), folder, "config.json");
-
-export function configPath(location: ConfigLocation): string {
-	return configFile("pi-yt", location);
-}
-
-/** Where releases before the pi-yt rename saved the account; read only, never written. */
-export function legacyConfigPath(location: ConfigLocation): string {
-	return configFile("gentle-shell-yt", location);
+export function configPath({ home, env = process.env }: ConfigLocation): string {
+	return path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "pi-yt", "config.json");
 }
 
 function parseAccount(value: unknown): Account | null | undefined {
@@ -52,15 +44,12 @@ function parseConfig(text: string): Config | undefined {
 	return undefined;
 }
 
-/** The pi-yt config; when it does not exist yet, a valid one from the old gentle-shell-yt folder. */
 export async function readConfig(location: ConfigLocation): Promise<Config> {
 	let text: string;
 	try {
 		text = await readFile(configPath(location), "utf8");
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") return { version: 1, account: null };
-		const legacy = await readFile(legacyConfigPath(location), "utf8").catch(() => null);
-		return (legacy !== null && parseConfig(legacy)) || { version: 1, account: null };
+	} catch {
+		return { version: 1, account: null };
 	}
 	return parseConfig(text) ?? { version: 1, account: null, malformed: true };
 }

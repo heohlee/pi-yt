@@ -31,7 +31,7 @@ pi-yt does not talk to YouTube itself; it drives yt-dlp and mpv:
 
 ## Features
 
-- **Overlay**: Recommended, History, Watch later, Liked videos, Playlists, the queue and search 
+- **Overlay**: Recommended, History, Watch later, Liked videos, Playlists, the queue and search.
 - **Firefox, Zen, Chromium, Chrome, Brave and Helium** profiles, or no account to only search.
 - **Play all, shuffle, queue, seek and volume**.
 - **Full mouse support**
@@ -43,6 +43,12 @@ pi-yt does not talk to YouTube itself; it drives yt-dlp and mpv:
 - Pi on Node.js 24 or newer
 - [mpv](https://mpv.io/)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+
+### Platforms
+
+- **Linux**: supported.
+- **macOS**: not tested.
+- **Windows**: not supported.
 
 ## Install
 
@@ -92,7 +98,7 @@ Run `/yt` and pick the browser where you are signed in to YouTube:
 
 - Cookies are read by yt-dlp only, never copied, logged or stored; `~/.config/pi-yt/config.json` keeps only the browser and profile.
 - Search does not send your cookies.
-- `/yt` is a command, not an agent tool: your history never reach the model.
+- `/yt` is a command, not an agent tool: your history never reaches the model.
 - The yt-dlp update check is one anonymous request to GitHub at most once a day, only for the copy `/yt` installed.
 
 ## Contributing

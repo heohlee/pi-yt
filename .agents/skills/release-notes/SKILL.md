@@ -35,7 +35,7 @@ Use when drafting or revising release text. Do not use for bumping versions, man
 1. Resolve the requested version, exact target and previous published release. Ask if ambiguous. Inspect the source range and merged PRs; for a first release inspect capabilities instead.
 2. Use native generated notes as input, not finished copy. Inspect every change, including unlabeled ones, instead of dropping it.
 3. Select only applicable sections. Read `assets/examples.md` for hypothetical formatting, never factual claims.
-4. Finish with a real Full changelog comparison when a previous release exists, then one Documentation link line. Pin links to verified source refs. Do not add a Documentation section. pi-yt has no translated documentation, so there are no language links.
+4. Finish with a real Full changelog comparison when a previous release exists, then one Documentation link line. Pin links to verified source refs. Do not add a Documentation section. The README has a Spanish translation (`README.es.md`); release notes stay in English and link only the English README.
 
 ## Output Contract
 

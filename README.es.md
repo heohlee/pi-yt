@@ -44,6 +44,12 @@ pi-yt no habla con YouTube directamente; usa yt-dlp y mpv:
 - [mpv](https://mpv.io/)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 
+### Plataformas
+
+- **Linux**: soportado.
+- **macOS**: sin probar.
+- **Windows**: no soportado.
+
 ## Instalación
 
 ### Pi

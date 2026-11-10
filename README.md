@@ -4,6 +4,8 @@
 
 Play your YouTube library from [Pi](https://pi.dev) through the YouTube session already open in your browser.
 
+English | [Español](README.es.md)
+
 [![CI](https://github.com/heohlee/pi-yt/actions/workflows/ci.yml/badge.svg)](https://github.com/heohlee/pi-yt/actions/workflows/ci.yml)
 [![Security](https://github.com/heohlee/pi-yt/actions/workflows/security.yml/badge.svg)](https://github.com/heohlee/pi-yt/actions/workflows/security.yml)
 [![npm](https://img.shields.io/npm/v/@heohlee/pi-yt)](https://www.npmjs.com/package/@heohlee/pi-yt)

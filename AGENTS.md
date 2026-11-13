@@ -1,6 +1,6 @@
 # pi-yt — Agent Skills Index
 
-Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-first workflow, local checks, merge policy and privacy rules.
+Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute, local checks, merge policy and privacy rules.
 
 When working on this project, load the relevant skill(s) BEFORE writing any code.
 

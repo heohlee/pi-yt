@@ -16,7 +16,7 @@ Run before the first write of any change: feature, bug, chore, docs, or skill ed
 - One change, one worktree, one branch. The main checkout is for reading, syncing, and merging.
 - The worktree goes in the sibling directory next to the repository root, never inside it: `../<repo>-worktrees/<type>-<slug>`.
 - Branch `<type>/<slug>`, based on an updated `main`. The prefixes are listed in `../pr-governance/SKILL.md`.
-- The governing issue comes first: `../issue-governance/SKILL.md` states the requirement.
+- An issue is optional; when one exists, it governs the change (`../issue-governance/SKILL.md`).
 
 ## Execution Steps
 
@@ -39,5 +39,5 @@ Report the worktree path, its branch and the base commit.
 ## References
 
 - `../../../AGENTS.md`: skill registration.
-- `../issue-governance/SKILL.md`: the issue requirement and label taxonomy.
+- `../issue-governance/SKILL.md`: when an issue is recommended and label taxonomy.
 - `../pr-governance/SKILL.md`: branch prefixes.

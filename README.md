@@ -103,7 +103,7 @@ Run `/yt` and pick the browser where you are signed in to YouTube:
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for the issue-first workflow, development checks and pull request conventions.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute, development checks and pull request conventions.
 
 ## License
 

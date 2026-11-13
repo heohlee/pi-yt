@@ -1,14 +1,14 @@
 # Contributing to pi-yt
 
-Every change starts with a GitHub issue, including bugs, features, documentation, chores, CI and tooling. Open or find the issue **before implementation**. Creating the issue authorizes work: there is no separate approval step, approval label or required assignee.
+Pull requests are welcome without an issue: opening one first is optional. For large or design-changing work, an issue lets us agree on the idea before you write code. No issue needs approval: there is no approval step, approval label or required assignee.
 
 ## Quick path
 
-1. Find or create an [issue](https://github.com/heohlee/pi-yt/issues/new/choose) describing the motivation and acceptance criteria. Use the bug report or feature request form; for documentation, chores, CI and tooling, use `gh issue create`.
+1. Optional: find or create an [issue](https://github.com/heohlee/pi-yt/issues/new/choose) describing the motivation and acceptance criteria, recommended for large or design-changing work. Use the bug report or feature request form; for documentation, chores, CI and tooling, use `gh issue create`.
 2. Create a worktree and a branch from `main` named `type/slug` (see below).
 3. Implement the scoped change with tests and relevant documentation.
 4. Run the checks below and open a PR using the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
-5. Include a standalone closing line in the PR body, replacing the example number with your issue:
+5. If the PR resolves an issue, include a standalone closing line in the PR body, replacing the example number with your issue:
 
    ```text
    Closes #123
@@ -51,10 +51,9 @@ The `Security` workflow runs CodeQL (JavaScript/TypeScript) and `npm audit --aud
 
 ## Pull requests and merging
 
-- Follow the PR template: Why, Summary, Verification, Not verified, and `Closes #<number>`.
+- Follow the PR template: Why, Summary, Verification, Not verified, and `Closes #<number>` if the PR resolves an issue.
 - Report checks actually run and explicitly list anything not verified, including manual checks in Pi or Gentle Shell.
-- Keep the change focused on its governing issue; update the issue if scope changes.
-- The `pr-issue` check requires a standalone `Closes #<number>` line referencing a real issue in this repository. References inside HTML comments, fenced code blocks and the template placeholder do not count. Dependabot update PRs are exempt.
+- Keep the change focused; if it has an issue, update the issue when scope changes.
 - Wait for all required checks to be green, including on documentation-only PRs. Local results are not proof that remote checks passed.
 - Maintainers merge with a **merge commit**, not squash or rebase.
 

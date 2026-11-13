@@ -55,7 +55,7 @@ The `Security` workflow runs CodeQL (JavaScript/TypeScript) and `npm audit --aud
 - Report checks actually run and explicitly list anything not verified, including manual checks in Pi or Gentle Shell.
 - Keep the change focused; if it has an issue, update the issue when scope changes.
 - Wait for all required checks to be green, including on documentation-only PRs. Local results are not proof that remote checks passed.
-- Maintainers merge with a **merge commit**, not squash or rebase.
+- Pull requests are merged with a **merge commit**, not squash or rebase.
 
 ## Releases
 
